@@ -1,0 +1,48 @@
+# Organizer data and local audit
+/open/
+/forte файлы/
+/artifacts/
+/data/
+/uploads/
+/results/
+/frames/
+*.mov
+*.MOV
+*.mp4
+*.avi
+*.mkv
+*.xlsx
+*.xls
+*.csv
+*.tsv
+*.docx
+
+# Secrets and local settings
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.log
+*.sqlite
+*.sqlite3
+*.db
+
+# Models and generated files
+/models/
+/weights/
+/checkpoints/
+*.safetensors
+*.gguf
+*.pt
+*.pth
+.cache/
+__pycache__/
+*.pyc
+.venv/
+venv/
+node_modules/
+dist/
+build/
+.DS_Store
+Thumbs.db

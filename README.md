@@ -8,6 +8,8 @@
 
 Подробности: [запуск и публичный доступ](docs/DEPLOYMENT.md), [стык A/B/C](docs/WORKER_TRANSPORT.md), [результат роли C](docs/HANDOFF_C.md), [чеклист оригинального кейса](docs/CASE_CHECKLIST_C.md).
 
+18 октября выбран запуск **всего сервиса на ноутбуке A без VPN**. Инструкция: [SINGLE_LAPTOP.md](docs/SINGLE_LAPTOP.md), команда после готовности модели и evaluator — `python -m scripts.run_local`. Свежие A `80354a6` и B `f01e643` объединены, но извлечение фактов, активация проверенных правил и окончательная политика ещё не готовы: [INTEGRATION_C.md](docs/INTEGRATION_C.md). Публичный адрес отложен пользователем; текущая готовность интерфейса не подтверждает анализ видео.
+
 Начать здесь:
 
 - [prompts/ROLE_A.md](prompts/ROLE_A.md), [prompts/ROLE_B.md](prompts/ROLE_B.md), [prompts/ROLE_C.md](prompts/ROLE_C.md) — готовые задания для ваших ИИ в открытой папке репозитория.

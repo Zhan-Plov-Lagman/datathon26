@@ -1,13 +1,23 @@
-param([string]$WorkerHost = '127.0.0.1')
+param(
+    [string]$WorkerHost = '127.0.0.1',
+    [switch]$WithWorker,
+    [string]$Python = '.venv/Scripts/python.exe'
+)
 $ErrorActionPreference = 'Stop'
 Set-Location -LiteralPath $PSScriptRoot
-if (-not (Test-Path -LiteralPath '.venv/Scripts/python.exe')) {
+if (-not (Test-Path -LiteralPath $Python)) {
+    if ($Python -ne '.venv/Scripts/python.exe') { throw 'Selected Python environment does not exist' }
     py -3 -m venv .venv
     if ($LASTEXITCODE -ne 0) { throw 'Cannot create Python environment' }
 }
-& ./.venv/Scripts/python.exe -m pip install -r requirements-api.txt
+& $Python -m pip install -r requirements-api.txt
 if ($LASTEXITCODE -ne 0) { throw 'Cannot install API dependencies' }
-& ./.venv/Scripts/python.exe -m scripts.setup_coordinator
+& $Python -m scripts.setup_coordinator
 if ($LASTEXITCODE -ne 0) { throw 'Cannot initialize local configuration' }
-& ./.venv/Scripts/python.exe -m app.api --worker-host $WorkerHost
+if ($WithWorker) {
+    if ($WorkerHost -ne '127.0.0.1') { throw 'Single-laptop mode keeps the worker API on loopback' }
+    & $Python -m scripts.run_local
+} else {
+    & $Python -m app.api --worker-host $WorkerHost
+}
 exit $LASTEXITCODE

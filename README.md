@@ -1,8 +1,8 @@
-# datathon-26
+# datathon26
 
 Проект для кейса ForteBank на Datathon 26: локальный AI-сервис анализа видеозаписей кассовых операций с таймкодами, кадрами-доказательствами и нормативным обоснованием.
 
-Команда: три участника, три ноутбука — две RTX 4050 и одна RTX 3050. Статус: подготовлены план и командные договорённости; сервис ещё не реализован.
+Команда: три участника, три ноутбука — две RTX 4050 и одна RTX 3050. Арман — роль A. Общие инструкции находятся в `main`, реализация локального видеомодуля — в ветке `feature/ml-worker`. Полный сервис с правилами и API ещё не собран.
 
 Начать здесь:
 
@@ -16,10 +16,20 @@
 Для двух остальных участников:
 
 ```powershell
-git clone https://github.com/undertaker7182/datathon-26.git
-cd datathon-26
-git switch -c feature/my-task
+git clone https://github.com/Zhan-Plov-Lagman/datathon26.git
+cd datathon26
 ```
+
+Открыть эту папку в редакторе с ИИ. Участник со второй RTX 4050 передаёт помощнику текст `prompts/ROLE_B.md` и работает в `feature/rules-eval`; участник с RTX 3050 — текст `prompts/ROLE_C.md` и ветку `feature/api-ui`. Помощнику нужен доступ ко всей папке, а не только вложенный файл TEAM_WORKFLOW. Роль A уже выполняется на ноутбуке Армана.
+
+Если репозиторий уже клонирован со старого адреса, повторно клонировать не нужно:
+
+```powershell
+git remote set-url origin https://github.com/Zhan-Plov-Lagman/datathon26.git
+git fetch origin
+```
+
+Текущий код A и инструкция подключения: [ветка feature/ml-worker](https://github.com/Zhan-Plov-Lagman/datathon26/tree/feature/ml-worker), [docs/WORKER.md](https://github.com/Zhan-Plov-Lagman/datathon26/blob/feature/ml-worker/docs/WORKER.md), [docs/HANDOFF_A.md](https://github.com/Zhan-Plov-Lagman/datathon26/blob/feature/ml-worker/docs/HANDOFF_A.md). C объединяет ветки после проверки стыков; B и C не должны заново реализовывать видеомодуль A.
 
 Скачать данные из исходной ссылки организаторов, разместить их локально и выполнить инструкцию `docs/DATA_SETUP.md`. Скрипт аудита уже доступен; команды запуска приложения добавляются вместе с работающей реализацией.
 

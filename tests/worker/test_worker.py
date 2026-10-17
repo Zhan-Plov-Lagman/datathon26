@@ -7,9 +7,10 @@ import subprocess
 import tempfile
 import time
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
-from app.evidence.frames import extract_evidence
+from app.evidence.frames import extract_evidence, extract_evidence_batch
 from app.inference.pipeline import LocalVideoAnalyzer
 from app.inference.schema import ModelOutputError, parse_observations
 from app.video.sampling import DeadlineExceeded, VideoError, plan_windows, probe_video, sample_frames
@@ -118,6 +119,51 @@ class SyntheticVideoTests(unittest.TestCase):
         bad.write_bytes(b"not a video")
         with self.assertRaises(VideoError):
             probe_video(bad)
+
+    def test_batch_evidence_decodes_once_and_keeps_event_mapping(self):
+        with patch("app.evidence.frames.sample_frames", wraps=sample_frames) as sampling:
+            result = extract_evidence_batch(self.video, {"a": [0.32, 0.65, 0.66], "b": [0.65]})
+        self.assertEqual(sampling.call_count, 1)
+        self.assertEqual(len(result["a"]), 2)
+        self.assertEqual(result["a"][1], result["b"][0])
+        self.assertEqual(result["b"][0]["timestamp_sec"], 0.8)
+        with self.assertRaises(DeadlineExceeded):
+            extract_evidence_batch(self.video, {"a": [0]}, deadline=time.monotonic() - 1)
+        with self.assertRaises(ValueError):
+            extract_evidence_batch(self.video, {"a": [0]}, deadline=float("nan"))
+
+    def test_refinements_share_deadline_and_reuse_identical_interval(self):
+        class Observer:
+            calls = 0
+            deadlines = []
+
+            def observe(self, frames, previous_context, deadline):
+                self.calls += 1
+                self.deadlines.append(deadline)
+                return {"operation_context": "synthetic", "observations": [], "visibility_limits": []}
+
+        observer = Observer()
+        analyzer = LocalVideoAnalyzer(observer)
+        deadline = time.monotonic() + 30
+        intervals = [{"candidate_id": "a", "start_sec": 0.1, "end_sec": 1.0},
+                     {"candidate_id": "b", "start_sec": 0.1, "end_sec": 1.0},
+                     {"candidate_id": "c", "start_sec": 0.3, "end_sec": 1.2}]
+        result = analyzer.refine_intervals(self.video, "synthetic", intervals, deadline=deadline)
+        self.assertEqual(observer.calls, 2)
+        self.assertEqual(observer.deadlines, [deadline, deadline])
+        self.assertEqual([item["candidate_id"] for item in result["refinements"]], ["a", "b", "c"])
+        self.assertEqual(result["refinements"][0]["report"]["coverage_scope"], "interval")
+        self.assertNotIn("verdict", result)
+        self.assertEqual(result["metrics"]["unique_intervals"], 2)
+        before = observer.calls
+        with self.assertRaises(ValueError):
+            analyzer.refine_intervals(self.video, "synthetic", intervals + [
+                {"candidate_id": "invalid", "start_sec": 0, "end_sec": 100}])
+        self.assertEqual(observer.calls, before)
+        with self.assertRaises(DeadlineExceeded):
+            analyzer.analyze(self.video, "synthetic", deadline=time.monotonic() - 1)
+        with self.assertRaises(ValueError):
+            analyzer.analyze(self.video, "synthetic", deadline=float("nan"))
 
 
 if __name__ == "__main__":

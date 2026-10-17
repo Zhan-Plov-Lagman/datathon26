@@ -23,11 +23,14 @@ class LocalVideoAnalyzer:
         self.max_long_edge = max_long_edge
 
     def analyze(self, video_path: str | Path, job_id: str, timeout_sec: float = 240,
-                start_sec: float = 0, end_sec: float | None = None) -> dict:
+                start_sec: float = 0, end_sec: float | None = None, *,
+                deadline: float | None = None) -> dict:
         if not math.isfinite(timeout_sec) or timeout_sec <= 0:
             raise ValueError("Timeout must be finite and positive")
         started = time.monotonic()
-        deadline = started + timeout_sec
+        if deadline is not None and not math.isfinite(deadline):
+            raise ValueError("Deadline must be finite")
+        deadline = min(started + timeout_sec, deadline) if deadline is not None else started + timeout_sec
         info = probe_video(video_path, deadline)
         windows = plan_windows(info.duration_sec, self.window_sec, self.overlap_sec,
                                self.frames_per_window, start_sec, end_sec)
@@ -66,3 +69,44 @@ class LocalVideoAnalyzer:
                 "metrics": {"total_sec": round(time.monotonic() - started, 3),
                             "decode_sec": round(decode_sec, 3),
                             **(self.observer.metrics() if hasattr(self.observer, "metrics") else {})}}
+
+    def refine_intervals(self, video_path: str | Path, job_id: str, intervals: list[dict],
+                         timeout_sec: float = 120, *, deadline: float | None = None) -> dict:
+        """Denser review of B-selected intervals; never confirms a legal candidate.
+
+        Each input has candidate_id, start_sec, end_sec. Identical intervals reuse
+        one analysis. All intervals share one deadline; no partial-success return.
+        """
+        if not math.isfinite(timeout_sec) or timeout_sec <= 0:
+            raise ValueError("Timeout must be finite and positive")
+        if deadline is not None and not math.isfinite(deadline):
+            raise ValueError("Deadline must be finite")
+        started = time.monotonic()
+        deadline = min(started + timeout_sec, deadline) if deadline is not None else started + timeout_sec
+        info = probe_video(video_path, deadline)
+        normalized, identifiers = [], set()
+        for interval in intervals:
+            identifier = interval["candidate_id"]
+            if not isinstance(identifier, str) or not identifier.strip() or identifier in identifiers:
+                raise ValueError("Candidate identifiers must be nonempty and unique")
+            start, end = interval["start_sec"], interval["end_sec"]
+            if type(start) not in (int, float) or type(end) not in (int, float):
+                raise ValueError("Interval endpoints must be numbers")
+            plan_windows(info.duration_sec, start_sec=start, end_sec=end)
+            normalized.append((identifier, start, end))
+            identifiers.add(identifier)
+        dense = LocalVideoAnalyzer(self.observer, window_sec=4, overlap_sec=1,
+                                   frames_per_window=6, max_long_edge=self.max_long_edge)
+        cache, results = {}, []
+        for identifier, start, end in normalized:
+            check_deadline(deadline)
+            key = (start, end)
+            if key not in cache:
+                cache[key] = dense.analyze(video_path, job_id, timeout_sec,
+                                           start_sec=start, end_sec=end, deadline=deadline)
+            results.append({"candidate_id": identifier, "report": cache[key]})
+        check_deadline(deadline)
+        return {"schema_version": "refinements.v1", "job_id": job_id,
+                "analysis_kind": "observations_only", "complete": True,
+                "refinements": results, "metrics": {"unique_intervals": len(cache),
+                "total_sec": round(time.monotonic() - started, 3)}}

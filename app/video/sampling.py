@@ -17,6 +17,8 @@ class DeadlineExceeded(TimeoutError):
 
 
 def check_deadline(deadline: float | None) -> None:
+    if deadline is not None and not math.isfinite(deadline):
+        raise ValueError("Deadline must be finite")
     if deadline is not None and time.monotonic() >= deadline:
         raise DeadlineExceeded("Analysis deadline exceeded")
 

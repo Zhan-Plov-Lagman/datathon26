@@ -6,6 +6,10 @@ import json
 class ModelOutputError(RuntimeError):
     """The model did not produce a grounded, valid observation structure."""
 
+    def __init__(self, reason="invalid_schema"):
+        self.reason = reason if reason in ("invalid_json", "invalid_schema") else "invalid_schema"
+        super().__init__("Model output is not valid grounded observation JSON")
+
 
 def parse_observations(raw: str, frame_times: list[float]) -> dict:
     # Never put raw model output in an exception or assistant-visible log.
@@ -41,5 +45,7 @@ def parse_observations(raw: str, frame_times: list[float]) -> dict:
                              "start_sec": frame_times[start], "end_sec": frame_times[end],
                              "description": description.strip()})
         return {"operation_context": context, "visibility_limits": limits, "observations": grounded}
-    except (ValueError, KeyError, TypeError, IndexError) as exc:
-        raise ModelOutputError("Model output is not valid grounded observation JSON") from None
+    except json.JSONDecodeError:
+        raise ModelOutputError("invalid_json") from None
+    except (ValueError, KeyError, TypeError, IndexError):
+        raise ModelOutputError("invalid_schema") from None

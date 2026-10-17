@@ -4,7 +4,7 @@ import os
 import time
 from pathlib import Path
 
-from app.inference.schema import parse_observations
+from app.inference.schema import ModelOutputError, parse_observations
 from app.video.sampling import DeadlineExceeded, SampledFrame, check_deadline
 
 
@@ -62,6 +62,22 @@ class QwenObserver:
 
     def observe(self, frames: list[SampledFrame], previous_context: str = "",
                 deadline: float | None = None) -> dict:
+        for attempt in range(2):
+            check_deadline(deadline)
+            try:
+                result = self._observe_once(frames, previous_context, deadline, concise=bool(attempt))
+                result["generation"] = {"attempts": attempt + 1}
+                return result
+            except ModelOutputError as exc:
+                exc.attempts = attempt + 1
+                # Retry malformed JSON only; never clamp unsupported frame indices
+                # or replace a failed observation with an empty successful result.
+                if attempt or exc.reason != "invalid_json":
+                    raise
+                self._format_retries = getattr(self, "_format_retries", 0) + 1
+
+    def _observe_once(self, frames: list[SampledFrame], previous_context: str,
+                      deadline: float | None, concise: bool = False) -> dict:
         from transformers import StoppingCriteria, StoppingCriteriaList
 
         check_deadline(deadline)
@@ -73,7 +89,12 @@ class QwenObserver:
                             {"type": "image"}])
         content.append({"type": "text", "text": "Describe this sequence. Prior tentative context (not new evidence): "
                         + previous_context[:600]})
-        messages = [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": content}]
+        system = SYSTEM_PROMPT
+        if concise:
+            system += ("\nSTRICT SHORT JSON: use at most TWO observations, each description at most 20 words. "
+                       "operation_context at most 15 words; at most TWO visibility_limits, each at most 12 words. "
+                       "Close all arrays and the JSON object. No prose before or after JSON.")
+        messages = [{"role": "system", "content": system}, {"role": "user", "content": content}]
         prompt = self.processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         inputs = self.processor(text=[prompt], images=[frame.image for frame in frames],
                                 return_tensors="pt", padding=True).to("cuda:0")
@@ -92,10 +113,16 @@ class QwenObserver:
             generated = output[:, inputs["input_ids"].shape[-1]:]
             raw = self.processor.batch_decode(generated, skip_special_tokens=True,
                                                clean_up_tokenization_spaces=False)[0]
-            return parse_observations(raw, [frame.timestamp_sec for frame in frames])
+            try:
+                return parse_observations(raw, [frame.timestamp_sec for frame in frames])
+            except ModelOutputError as exc:
+                exc.generated_tokens = int(generated.shape[-1])
+                exc.hit_token_limit = exc.generated_tokens >= self.max_new_tokens
+                raise
         finally:
             del inputs
 
     def metrics(self) -> dict:
-        return {"peak_allocated_mib": round(self.torch.cuda.max_memory_allocated() / 2**20, 1),
+        return {"format_retries": getattr(self, "_format_retries", 0),
+                "peak_allocated_mib": round(self.torch.cuda.max_memory_allocated() / 2**20, 1),
                 "peak_reserved_mib": round(self.torch.cuda.max_memory_reserved() / 2**20, 1)}

@@ -10,7 +10,8 @@ class SyntheticProcessor:
                 "complete": True, "coverage_scope": "full_video", "rules_reviewed": True,
                 "duration_sec": 3.0, "model_id": "synthetic-test-only", "model_revision": "test",
                 "rules_version": "synthetic-test-only", "pipeline_version": self.pipeline_version,
-                "verdict": "no_violation", "violations": [], "rule_ids": []}
+                "verdict": "no_violation", "violations": [], "rule_ids": [],
+                "negative_policy_version": "synthetic-test-only"}
 
 
 class HangingProcessor(SyntheticProcessor):

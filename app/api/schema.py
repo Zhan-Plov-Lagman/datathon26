@@ -63,11 +63,14 @@ class AnalysisResult(StrictModel):
     verdict: Literal["violation", "no_violation"]
     violations: Annotated[list[Violation], Field(max_length=100)]
     rule_ids: Annotated[list[Text], Field(max_length=100)]
+    negative_policy_version: Text | None = None
 
     @model_validator(mode="after")
     def consistent(self):
         if (self.verdict == "violation") != bool(self.violations):
             raise ValueError("Verdict and events disagree")
+        if self.verdict == "no_violation" and self.negative_policy_version is None:
+            raise ValueError("No violation requires a reviewed negative decision policy")
         if len(self.rule_ids) != len(self.violations):
             raise ValueError("Each event needs its reviewed rule id")
         for event in self.violations:

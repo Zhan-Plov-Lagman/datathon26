@@ -61,7 +61,8 @@ def test_full_public_contract_restart_and_private_isolation(settings, result):
 
 
 def test_empty_result_and_unknown_job(settings, result):
-    result.update(verdict="no_violation", violations=[], rule_ids=[])
+    result.update(verdict="no_violation", violations=[], rule_ids=[],
+                  negative_policy_version="synthetic-test-only")
     public, private = clients(settings)
     with public, private:
         job_id = upload(public).json()["job_id"]

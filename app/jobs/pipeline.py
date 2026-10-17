@@ -6,7 +6,7 @@ import os
 import time
 from typing import Annotated, Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from app.api.schema import AnalysisResult, Seconds, StrictModel, Text
 
@@ -24,6 +24,13 @@ class RuleDecision(StrictModel):
     rules_reviewed: Literal[True]
     rules_version: Text
     supported: Annotated[list[SupportedEvent], Field(max_length=100)]
+    negative_policy_version: Text | None = None
+
+    @model_validator(mode="after")
+    def justified_negative(self):
+        if not self.supported and self.negative_policy_version is None:
+            raise ValueError("Empty events require a reviewed negative decision policy")
+        return self
 
 
 def import_factory(spec):
@@ -67,6 +74,7 @@ class IntegratedProcessor:
             "duration_sec": report["video"]["duration_sec"],
             "model_id": report["model"]["id"], "model_revision": report["model"]["revision"],
             "rules_version": decision.rules_version, "pipeline_version": self.pipeline_version,
+            "negative_policy_version": decision.negative_policy_version,
             "verdict": "violation" if events else "no_violation", "violations": events,
             "rule_ids": [event.rule_id for event in decision.supported],
         }).model_dump()

@@ -1,0 +1,176 @@
+{
+  "schema_version": "rules.v1",
+  "version": "0.2.0-source-checked",
+  "rules": [
+    {
+      "rule_id": "cashier_leaves_service",
+      "type": "cashier_leaves_service",
+      "title": "Уход кассового работника до завершения обслуживания",
+      "status": "hypothesis",
+      "validated_on_local_cases": false,
+      "source": {
+        "document": "Постановление Правления НБРК № 231 от 29.11.2019",
+        "clause": "22",
+        "url": "https://adilet.zan.kz/rus/docs/V1900019680",
+        "edition_date": "2026-07-12",
+        "checked_on": "2026-10-17",
+        "reviewer": "Codex: public text comparison; local validation pending",
+        "text_verified": true
+      },
+      "applicability": [
+        "bank_cash_acceptance",
+        "actor_is_cashier"
+      ],
+      "required_facts": [
+        "cashier_left_workplace",
+        "service_in_progress"
+      ],
+      "exceptions": [
+        "service_completed"
+      ],
+      "requires_full_sequence": false,
+      "limitations": [
+        "Текст сверен на официальном сайте; локальная проверка класса и сложных отрицательных примеров не завершена.",
+        "Неизвестные предпосылки и исключения не считать ложными.",
+        "Пункт 22 находится в параграфе о приеме наличных; выдачу этим правилом не покрываем."
+      ],
+      "explanation": "Уход кассового работника до завершения обслуживания. Условия применимости и исключения проверены по локальным наблюдениям."
+    },
+    {
+      "rule_id": "personal_items_storage",
+      "type": "personal_items_storage",
+      "title": "Хранение личных вещей в кассовом узле",
+      "status": "hypothesis",
+      "validated_on_local_cases": false,
+      "source": {
+        "document": "Постановление Правления НБРК № 231 от 29.11.2019",
+        "clause": "12",
+        "url": "https://adilet.zan.kz/rus/docs/V1900019680",
+        "edition_date": "2026-07-12",
+        "checked_on": "2026-10-17",
+        "reviewer": "Codex: public text comparison; local validation pending",
+        "text_verified": true
+      },
+      "applicability": [
+        "cash_unit_confirmed",
+        "item_owned_by_bank_employee"
+      ],
+      "required_facts": [
+        "item_is_personal",
+        "item_stored_in_cash_unit"
+      ],
+      "exceptions": [
+        "item_is_work_equipment",
+        "item_is_medicine_or_medical_device",
+        "communication_device_without_photo_video"
+      ],
+      "requires_full_sequence": false,
+      "limitations": [
+        "Текст сверен на официальном сайте; локальная проверка класса и сложных отрицательных примеров не завершена.",
+        "Неизвестные предпосылки и исключения не считать ложными."
+      ],
+      "explanation": "Установлено хранение личной вещи работника банка в кассовом узле; предусмотренные исключения исключены."
+    },
+    {
+      "rule_id": "cash_acceptance_without_count",
+      "type": "cash_acceptance_without_count",
+      "title": "Приём наличных без требуемого пересчёта",
+      "status": "hypothesis",
+      "validated_on_local_cases": false,
+      "source": {
+        "document": "Постановление Правления НБРК № 231 от 29.11.2019",
+        "clause": "19(2), 20",
+        "url": "https://adilet.zan.kz/rus/docs/V1900019680",
+        "edition_date": "2026-07-12",
+        "checked_on": "2026-10-17",
+        "reviewer": "Codex: public text comparison; local validation pending",
+        "text_verified": true
+      },
+      "applicability": [
+        "bank_cash_acceptance"
+      ],
+      "required_facts": [
+        "acceptance_completed",
+        "required_count_absent"
+      ],
+      "exceptions": [
+        "collection_bag_acceptance_procedure_applies"
+      ],
+      "requires_full_sequence": true,
+      "limitations": [
+        "Текст сверен на официальном сайте; локальная проверка класса и сложных отрицательных примеров не завершена.",
+        "Неизвестные предпосылки и исключения не считать ложными.",
+        "Не делать вывод о подлинности денег; машинный пересчет допустим. Проверять весь этап приема."
+      ],
+      "explanation": "Приём наличных без требуемого пересчёта. Условия применимости и исключения проверены по локальным наблюдениям."
+    },
+    {
+      "rule_id": "cash_issue_without_count",
+      "type": "cash_issue_without_count",
+      "title": "Выдача наличных без требуемого пересчёта",
+      "status": "hypothesis",
+      "validated_on_local_cases": false,
+      "source": {
+        "document": "Постановление Правления НБРК № 231 от 29.11.2019",
+        "clause": "31(4), 32",
+        "url": "https://adilet.zan.kz/rus/docs/V1900019680",
+        "edition_date": "2026-07-12",
+        "checked_on": "2026-10-17",
+        "reviewer": "Codex: public text comparison; local validation pending",
+        "text_verified": true
+      },
+      "applicability": [
+        "bank_cash_issue"
+      ],
+      "required_facts": [
+        "issue_completed",
+        "required_count_absent"
+      ],
+      "exceptions": [
+        "intact_banknote_pack_or_bundle",
+        "permitted_packaged_coins"
+      ],
+      "requires_full_sequence": true,
+      "limitations": [
+        "Текст сверен на официальном сайте; локальная проверка класса и сложных отрицательных примеров не завершена.",
+        "Неизвестные предпосылки и исключения не считать ложными.",
+        "Сохранная упаковка и маркировка могут исключать полистный пересчет; неполные/поврежденные корешки проверять отдельно."
+      ],
+      "explanation": "Выдача наличных без требуемого пересчёта. Условия применимости и исключения проверены по локальным наблюдениям."
+    },
+    {
+      "rule_id": "required_control_absent",
+      "type": "required_control_absent",
+      "title": "Отсутствие требуемого контроля операции",
+      "status": "hypothesis",
+      "validated_on_local_cases": false,
+      "source": {
+        "document": "Постановление Правления НБРК № 231 от 29.11.2019",
+        "clause": "42",
+        "url": "https://adilet.zan.kz/rus/docs/V1900019680",
+        "edition_date": "2026-07-12",
+        "checked_on": "2026-10-17",
+        "reviewer": "Codex: public text comparison; local validation pending",
+        "text_verified": true
+      },
+      "applicability": [
+        "bank_cash_recount_sort_or_pack",
+        "actor_is_cashier"
+      ],
+      "required_facts": [
+        "operation_completed",
+        "required_control_absent"
+      ],
+      "exceptions": [
+        "client_cash_acceptance_or_issue"
+      ],
+      "requires_full_sequence": true,
+      "limitations": [
+        "Текст сверен на официальном сайте; локальная проверка класса и сложных отрицательных примеров не завершена.",
+        "Неизвестные предпосылки и исключения не считать ложными.",
+        "Работник вне кадра не означает отсутствующий контроль; нужны обзор помещения и проверка роли."
+      ],
+      "explanation": "Отсутствие требуемого контроля операции. Условия применимости и исключения проверены по локальным наблюдениям."
+    }
+  ]
+}

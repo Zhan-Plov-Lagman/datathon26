@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import gc
 import json
 import time
 from pathlib import Path
@@ -9,6 +10,50 @@ from pathlib import Path
 from app.inference.worker import LocalGPUWorker
 from app.inference.qwen import QwenObserver
 from app.video.sampling import probe_video
+
+
+def run_stability(worker, video: Path, output: Path, timeout: float) -> list[dict]:
+    """One loaded worker, real development input, synthetic failures, safe metrics."""
+    from app.video.sampling import DeadlineExceeded, VideoError
+
+    invalid = output / "synthetic-invalid.mov"
+    invalid.write_bytes(b"synthetic invalid video")
+    torch = worker.analyzer.observer.torch
+    cases = [("valid", video, None), ("invalid_input", invalid, VideoError),
+             ("valid_after_invalid", video, None),
+             ("expired_deadline", video, DeadlineExceeded),
+             ("short_deadline", video, DeadlineExceeded),
+             ("valid_after_deadlines", video, None)]
+    rows = []
+    for index, (kind, path, expected) in enumerate(cases):
+        torch.cuda.synchronize()
+        torch.cuda.reset_peak_memory_stats()
+        before = worker.analyzer.observer.metrics().get("format_retries", 0)
+        started = time.monotonic()
+        deadline = started - 1 if kind == "expired_deadline" else started + (3 if kind == "short_deadline" else timeout)
+        row = {"sample_index": index, "case": kind, "expected_error": expected.__name__ if expected else None}
+        try:
+            report = worker.analyze(path, f"stability-{index}", timeout, deadline=deadline)
+            (output / f"observations-{index}.json").write_text(json.dumps(report), encoding="utf-8")
+            row.update({"complete": True, "expected_outcome": expected is None,
+                        "decode_sec": report["metrics"]["decode_sec"],
+                        "analysis_sec": report["metrics"]["total_sec"], "windows": len(report["windows"])})
+            del report
+        except Exception as exc:
+            row.update({"complete": False, "error_type": type(exc).__name__,
+                        "expected_outcome": expected is not None and isinstance(exc, expected)})
+        # Collect after the except block so exception tracebacks cannot retain tensors.
+        gc.collect()
+        torch.cuda.synchronize()
+        stats = worker.analyzer.observer.metrics()
+        row.update({"elapsed_sec": round(time.monotonic() - started, 3), **stats,
+                    "format_retries_this_task": stats.get("format_retries", 0) - before,
+                    "idle_allocated_mib": round(torch.cuda.memory_allocated() / 2**20, 1),
+                    "idle_reserved_mib": round(torch.cuda.memory_reserved() / 2**20, 1)})
+        rows.append(row)
+        (output / "stability-metrics.json").write_text(json.dumps(rows, indent=2), encoding="utf-8")
+        print(json.dumps(row), flush=True)
+    return rows
 
 
 def main() -> None:
@@ -20,7 +65,10 @@ def main() -> None:
     parser.add_argument("--model-dir", default="models/Qwen3-VL-2B-Instruct-shards")
     parser.add_argument("--timeout", type=float, default=240)
     parser.add_argument("--refine", action="store_true", help="Also test a middle interval, not a labeled event")
+    parser.add_argument("--stability", action="store_true", help="Six sequential cases on one explicit development video")
     args = parser.parse_args()
+    if args.stability and (not args.video or args.refine):
+        parser.error("--stability requires --video and cannot be combined with --refine")
     output = Path(args.output_dir)
     output.mkdir(parents=True, exist_ok=False)
     # Select by duration only, without reading labels or inferring from filenames.
@@ -33,6 +81,14 @@ def main() -> None:
     observer = QwenObserver(args.model_dir)
     load_sec = round(time.monotonic() - started, 3)
     worker = LocalGPUWorker(observer)
+    if args.stability:
+        rows = run_stability(worker, paths[0], output, args.timeout)
+        (output / "metrics.json").write_text(json.dumps({
+            "model_load_sec": load_sec, "model_revision": observer.model_revision,
+            "metrics": rows}, indent=2), encoding="utf-8")
+        if not all(row["expected_outcome"] for row in rows):
+            raise SystemExit(1)
+        return
     metrics = []
     for index, (path, info) in enumerate(selected):
         started = time.monotonic()

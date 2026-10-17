@@ -25,7 +25,10 @@ The observations array can be empty. Do not fabricate an action to fill it.
 
 class QwenObserver:
     def __init__(self, model_dir: str | Path, max_new_tokens: int = 384,
-                 quantize: bool = True):
+                 quantize: bool = True, language: str = "en"):
+        if language not in ("en", "ru"):
+            raise ValueError("Supported observation languages: en, ru")
+        self.language = language
         os.environ["HF_HUB_OFFLINE"] = "1"
         os.environ["TRANSFORMERS_OFFLINE"] = "1"
         os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
@@ -90,6 +93,9 @@ class QwenObserver:
         content.append({"type": "text", "text": "Describe this sequence. Prior tentative context (not new evidence): "
                         + previous_context[:600]})
         system = SYSTEM_PROMPT
+        if getattr(self, "language", "en") == "ru":
+            system = system.replace("short English descriptions", "short Russian descriptions")
+            system += "\nWrite all string VALUES in Russian; keep JSON KEY names unchanged."
         if concise:
             system += ("\nSTRICT SHORT JSON: use at most TWO observations, each description at most 20 words. "
                        "operation_context at most 15 words; at most TWO visibility_limits, each at most 12 words. "

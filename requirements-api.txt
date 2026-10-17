@@ -1,0 +1,11 @@
+# Coordinator + HTTP worker transport. No CUDA or model packages.
+# Exact versions verified on Python 3.13; Pillow matches A's requirements-worker.txt.
+fastapi==0.143.3
+starlette==1.8.0
+uvicorn==0.54.0
+pydantic==2.14.1
+python-multipart==0.0.32
+python-dotenv==1.2.4
+httpx==0.28.1
+Pillow==12.1.0
+-c requirements-api-lock.txt

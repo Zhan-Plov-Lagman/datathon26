@@ -1,0 +1,15 @@
+# Run on the team-controlled coordinator. FORTE_DOMAIN must resolve to this host.
+# Forward only TCP 80/443 to Caddy. Never forward worker port 8001.
+{$FORTE_DOMAIN} {
+    @allowed path / /healthz /assets/* /api/v1/analyze /api/v1/jobs/* /api/v1/readiness
+    handle @allowed {
+        request_body {
+            max_size 270MB
+        }
+        reverse_proxy 127.0.0.1:8000
+    }
+    handle {
+        respond 404
+    }
+    # No access log, response-body logger, analytics or external static assets.
+}

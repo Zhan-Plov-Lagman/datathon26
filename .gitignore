@@ -46,3 +46,13 @@ dist/
 build/
 .DS_Store
 Thumbs.db
+
+# Coordinator runtime, SQLite sidecars and synthetic test output
+/.runtime/
+/runtime/
+*.sqlite3-wal
+*.sqlite3-shm
+*.db-wal
+*.db-shm
+.pytest_cache/
+/test-results/

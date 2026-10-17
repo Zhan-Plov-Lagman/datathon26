@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Forte · Проверка видео</title>
+  <link rel="stylesheet" href="/assets/style.css">
+  <script src="/assets/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar"><a class="brand" href="/" aria-label="На главную">forte<span class="brand-dot">.</span><span class="brand-label">VIDEO REVIEW</span></a><span class="privacy">Обработка в локальном контуре</span></header>
+  <main>
+    <div class="intro"><p class="eyebrow">ПРОВЕРКА КАССОВЫХ ОПЕРАЦИЙ</p><h1>От видео к проверяемому событию.</h1><p>Загрузите запись, дождитесь анализа и проверьте события по времени, исходным кадрам и нормативному основанию.</p></div>
+    <div class="workspace">
+      <section class="panel upload-panel" aria-labelledby="upload-title">
+        <div class="section-heading"><span class="step">01</span><h2 id="upload-title">Загрузка записи</h2></div>
+        <form id="upload-form">
+          <label for="api-key">Ключ доступа</label>
+          <input id="api-key" type="password" autocomplete="off" placeholder="Введите ключ API" required spellcheck="false">
+          <p class="hint">Ключ используется только на этой странице и не сохраняется в браузере.</p>
+          <div id="readiness" class="readiness" role="status">Введите ключ, чтобы проверить готовность анализа.</div>
+          <button type="button" id="check-ready" class="text-button">Проверить подключение</button>
+          <label id="drop-zone" class="drop-zone" for="video-file"><span class="upload-symbol" aria-hidden="true">↑</span><strong id="file-name">Выберите или перетащите видео</strong><span id="file-meta">Формат MOV</span><input id="video-file" type="file" accept=".mov,video/quicktime" required></label>
+          <button id="submit" class="primary" type="submit">Начать анализ <span aria-hidden="true">→</span></button>
+          <p id="upload-message" class="message" role="status" aria-live="polite"></p>
+        </form>
+        <details class="resume"><summary>Открыть задание по ID</summary><form id="resume-form"><label for="job-id">Идентификатор задания</label><input id="job-id" placeholder="ID из ответа API" required autocomplete="off"><button class="secondary" type="submit">Проверить статус</button></form></details>
+      </section>
+      <section class="panel result-panel" aria-labelledby="result-title">
+        <div class="section-heading"><span class="step">02</span><h2 id="result-title">Результат анализа</h2><span id="status-badge" class="badge">Ожидание</span></div>
+        <div id="empty-state" class="empty-state"><div class="empty-icon" aria-hidden="true">▷</div><h3>Здесь появится результат</h3><p>Для каждого подтверждённого события — время, объяснение и кадры из исходной записи.</p></div>
+        <div id="job-info" hidden><p id="job-label" class="job-label"></p><p id="status-text" role="status" aria-live="polite"></p></div>
+        <div id="video-section" hidden><video id="player" controls preload="metadata" muted playsinline></video><p class="hint">Видео воспроизводится из выбранного локального файла. Кнопки времени переводят к событию.</p></div>
+        <p id="playback-note" class="hint" hidden>После обновления страницы выберите исходный MOV, чтобы перейти к событию в видео. Повторная загрузка для этого не нужна.</p>
+        <div id="events" aria-live="polite"></div>
+      </section>
+    </div>
+    <footer>ForteBank · Datathon 26 <span>Окончательную оценку события выполняет проверяющий.</span></footer>
+  </main>
+</body>
+</html>

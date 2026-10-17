@@ -1,0 +1,7 @@
+-r requirements-api.txt
+pytest==9.1.1
+# Optional browser checks use the installed Edge/Chrome; no browser download needed.
+playwright==1.58.0
+# Generate a synthetic MOV for browser tests; same versions as A's worker.
+av==16.1.0
+numpy==2.2.6

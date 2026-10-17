@@ -6,6 +6,8 @@
 
 Начать здесь:
 
+- [prompts/ROLE_A.md](prompts/ROLE_A.md), [prompts/ROLE_B.md](prompts/ROLE_B.md), [prompts/ROLE_C.md](prompts/ROLE_C.md) — готовые задания для ваших ИИ в открытой папке репозитория.
+- [AGENTS.md](AGENTS.md) — общие инструкции помощникам, границы ролей и условия локальности.
 - [TEAM_WORKFLOW.md](TEAM_WORKFLOW.md) — кто что делает, первые задачи и работа через Git.
 - [FORTEBANK_PIPELINE.md](FORTEBANK_PIPELINE.md) — полный пайплайн, расписание и приёмка.
 - [docs/CONTRACTS.md](docs/CONTRACTS.md) — общий контракт API и границы модулей до реализации.

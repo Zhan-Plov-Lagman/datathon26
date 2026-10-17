@@ -1,6 +1,6 @@
 {
   "schema_version": "rules.v1",
-  "version": "0.2.0-source-checked",
+  "version": "0.3.0-departure-basis-checked",
   "rules": [
     {
       "rule_id": "cashier_leaves_service",
@@ -13,8 +13,8 @@
         "clause": "22",
         "url": "https://adilet.zan.kz/rus/docs/V1900019680",
         "edition_date": "2026-07-12",
-        "checked_on": "2026-10-17",
-        "reviewer": "Codex: public text comparison; local validation pending",
+        "checked_on": "2026-10-18",
+        "reviewer": "Codex: public clause 22 rechecked; local validation pending",
         "text_verified": true
       },
       "applicability": [
@@ -32,7 +32,8 @@
       "limitations": [
         "Текст сверен на официальном сайте; локальная проверка класса и сложных отрицательных примеров не завершена.",
         "Неизвестные предпосылки и исключения не считать ложными.",
-        "Пункт 22 находится в параграфе о приеме наличных; выдачу этим правилом не покрываем."
+        "Пункт 22 находится в параграфе о приеме наличных; выдачу этим правилом не покрываем.",
+        "Переключение внимания или взаимодействия с другим клиентом не заменяет физическое покидание рабочего места; см. docs/LEGAL_DECISION_B.md."
       ],
       "explanation": "Уход кассового работника до завершения обслуживания. Условия применимости и исключения проверены по локальным наблюдениям."
     },

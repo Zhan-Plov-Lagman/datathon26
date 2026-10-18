@@ -1,3 +1,11 @@
+# Integration workspace override — explicitly requested by the user
+
+This is the independent `ИТОГ` checkout, branch `integration/forte-unified`.
+The user authorized implementing INTEGRATION_PLAN.md across component boundaries here.
+Read INTEGRATION_STATUS.md and docs/UNIFIED_SETUP.md first. Preserve the three original projects.
+Quality before latency, within the original jury limits. Do not claim production readiness from technical tests.
+The original privacy, local inference, evidence, Git, and no-extra-agent instructions below still apply.
+
 # Instructions for coding assistants
 
 Read `README.md`, `TEAM_WORKFLOW.md`, `docs/CONTRACTS.md`, and the assigned file in `prompts/` before implementing changes. The project has three human teammates using three separate laptops. Do not assume that you are responsible for all three roles.

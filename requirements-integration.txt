@@ -1,0 +1,12 @@
+# Add to the existing CUDA/worker environment; do not reinstall torch from PyPI.
+-r requirements-api.txt
+opencv-python-headless==4.11.0.86
+scipy==1.15.2
+scikit-learn==1.7.2
+joblib==1.6.0
+matplotlib==3.10.7
+polars==1.35.1
+psutil==7.1.3
+numpy==2.2.6
+# ultralytics and ultralytics-thop are installed separately with --no-deps,
+# reusing the verified torch/torchvision and headless OpenCV above.

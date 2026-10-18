@@ -58,3 +58,11 @@ Thumbs.db
 *.db-shm
 .pytest_cache/
 /test-results/
+
+# Independent integration workspace
+/.runtime-packages/
+/_source_state/
+/local-paths.json
+/AUDIT_REPORT.md
+/INTEGRATION_PLAN.md
+/source_requirements/

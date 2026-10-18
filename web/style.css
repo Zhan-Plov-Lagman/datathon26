@@ -142,6 +142,10 @@ h3{font-size:17px;font-weight:600;color:var(--ink);margin:0 0 10px;letter-spacin
 .result-tags{display:flex;justify-content:center;gap:7px;margin-top:24px;flex-wrap:wrap}
 .result-tags span{border:1px solid var(--line);border-radius:5px;padding:4px 9px;font-size:9px;color:#8b7b82}
 .job-label{font:10px/1.6 ui-monospace,monospace;color:var(--muted);overflow-wrap:anywhere}
+.job-reference{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.elapsed-status{font-size:14px;color:var(--wine);font-variant-numeric:tabular-nums;margin:12px 0}
+.elapsed-status span{font-size:24px;font-weight:600}
+.result-meta{font-size:12px;color:var(--muted);overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
 #status-text{font-size:13px}
 video{display:block;width:100%;max-height:330px;background:#26131d;border-radius:12px}
 .event{border-top:1px solid var(--line);margin-top:24px;padding-top:20px;animation:enter .4s var(--ease) both}

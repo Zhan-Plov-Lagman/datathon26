@@ -7,9 +7,9 @@
   <meta name="theme-color" content="#4a0221">
   <meta name="description" content="Проверка кассовых операций по видео: события, таймкоды и исходные кадры в одном интерфейсе. Проект Datathon 26 для кейса ForteBank.">
   <title>Forte · Видео под контролем</title>
-  <link rel="stylesheet" href="/assets/style.css?v=forte-4">
+  <link rel="stylesheet" href="/assets/style.css?v=forte-5">
   <script src="/assets/intro.js?v=forte-3" defer></script>
-  <script src="/assets/app.js?v=forte-3" defer></script>
+  <script src="/assets/app.js?v=forte-5" defer></script>
 </head>
 <body>
   <dialog id="brand-intro" class="brand-intro" aria-label="Вступительная анимация Forte" aria-describedby="intro-caption">
@@ -38,7 +38,7 @@
         <form id="upload-form">
           <label for="api-key">Ключ доступа</label>
           <input id="api-key" type="password" autocomplete="off" placeholder="Введите ключ API" required spellcheck="false">
-          <p class="hint">Введите значение FORTE_API_KEY из локального .env — без имени переменной и кавычек. Ключ не сохраняется в браузере.</p>
+          <p class="hint">Введите ключ, который вам выдала команда. После обновления страницы введите его повторно для просмотра результата. Ключ не сохраняется в браузере.</p>
           <div id="readiness" class="readiness" role="status">Введите ключ, чтобы проверить готовность анализа.</div>
           <button type="button" id="check-ready" class="text-button">Проверить подключение</button>
           <label id="drop-zone" class="drop-zone" for="video-file"><span class="upload-symbol" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 16V3m-5 5 5-5 5 5M4 15v5h16v-5"/></svg></span><strong id="file-name">Выберите или перетащите видео</strong><span id="file-meta">Формат MOV</span><span class="file-choice" aria-hidden="true">Выбрать файл <span>↗</span></span><input id="video-file" type="file" accept=".mov,video/quicktime" required aria-label="Выбрать видео MOV"></label>
@@ -50,7 +50,13 @@
       <section class="panel result-panel" aria-labelledby="result-title">
         <div class="section-heading"><span class="step">02</span><h2 id="result-title">Результат анализа</h2><span id="status-badge" class="badge">Ожидание</span></div>
         <div id="empty-state" class="empty-state"><div class="empty-visual" aria-hidden="true"><div class="empty-back"></div><div class="empty-icon"><svg viewBox="0 0 48 48"><rect x="6" y="9" width="36" height="30" rx="6"/><path d="m20 17 11 7-11 7Z"/></svg></div><span class="empty-spark">+</span></div><p class="empty-kicker">МЕСТО ДЛЯ ВАЖНЫХ ДЕТАЛЕЙ</p><h3>Ваша запись расскажет больше.</h3><p>После анализа здесь появятся события,<br>таймкоды и кадры из исходной записи.</p><div class="result-tags"><span>Таймкод</span><span>Исходный кадр</span><span>Основание</span></div></div>
-        <div id="job-info" hidden><p id="job-label" class="job-label"></p><p id="status-text" role="status" aria-live="polite"></p></div>
+        <div id="job-info" hidden>
+          <div class="job-reference"><p id="job-label" class="job-label"></p><a id="job-link" class="text-button" hidden>Ссылка на результат</a></div>
+          <p id="status-text" role="status" aria-live="polite"></p>
+          <p id="elapsed-status" class="elapsed-status" role="timer" aria-live="off" hidden><span id="elapsed-value">1</span> с с начала запуска</p>
+          <p id="result-meta" class="result-meta" hidden></p>
+          <p class="hint">Время до результата считается с начала запуска, включая загрузку, ожидание очереди и получение ответа. После обновления страницы — до повторного получения результата; это не отдельное время работы модели.</p>
+        </div>
         <div id="video-section" hidden><video id="player" controls preload="metadata" muted playsinline></video><p class="hint">Видео воспроизводится из выбранного локального файла. Кнопки времени переводят к событию.</p></div>
         <p id="playback-note" class="hint" hidden>После обновления страницы выберите исходный MOV, чтобы перейти к событию в видео. Повторная загрузка для этого не нужна.</p>
         <div id="events" aria-live="polite"></div>

@@ -5,7 +5,7 @@ import pytest
 from app.inference.assessments import build_bundle
 from app.jobs.detection import finalize_bundle
 from app.rules import RuleInputError
-from test_rules import fixture
+from tests.rules.test_rules import fixture
 
 
 def setup_bundle():
@@ -17,7 +17,11 @@ def setup_bundle():
                       'schema_version': 'detector_execution.v1', 'job_id': report['job_id'],
                       'detector_runs': [dict(rule_id=packet['rule_id'], status='complete',
                                             detector_version='synthetic', processed_window_ids=[0],
-                                            refinement_status='completed')]}})
+                                            refinement_status='completed')]}, 'episodes': [{
+                      'rule_id': packet['rule_id'], 'event_id': packet['event_id'], 'conflicts': [],
+                      'fact_sources': {name: {'origin': 'visual',
+                                             'observation_refs': copy.deepcopy(packet['observation_refs'])}
+                                       for name in packet['facts']}}]})
     return report, bundle, registry, [packet['rule_id']]
 
 
@@ -26,6 +30,8 @@ def test_two_verdicts_remain_internal(unknown):
     report, bundle, registry, scope = setup_bundle()
     if unknown:
         bundle['assessments'][0]['facts']['service_completed'] = None
+        bundle['diagnostics']['episodes'][0]['fact_sources']['service_completed'] = {
+            'origin': 'unknown', 'observation_refs': [], 'reason': 'synthetic uncertainty'}
     before = copy.deepcopy(bundle)
     result = finalize_bundle(report, bundle, registry=registry, supported_rule_ids=scope)
     assert result['verdict'] == ('no_violation' if unknown else 'violation')

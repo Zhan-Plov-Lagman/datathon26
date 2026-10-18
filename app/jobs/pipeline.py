@@ -68,7 +68,7 @@ class IntegratedProcessor:
                            "description": event.description, "evidence_frames": frames})
         if time.monotonic() >= deadline:
             raise TimeoutError
-        return AnalysisResult.model_validate({
+        result = AnalysisResult.model_validate({
             "schema_version": "analysis.v1", "analysis_kind": "rules_evaluated",
             "complete": True, "coverage_scope": "full_video", "rules_reviewed": True,
             "duration_sec": report["video"]["duration_sec"],
@@ -77,7 +77,12 @@ class IntegratedProcessor:
             "negative_policy_version": decision.negative_policy_version,
             "verdict": "violation" if events else "no_violation", "violations": events,
             "rule_ids": [event.rule_id for event in decision.supported],
-        }).model_dump()
+        })
+        for expected, actual in zip(decision.supported, result.violations, strict=True):
+            requested = list(dict.fromkeys(expected.evidence_timestamps))
+            if [frame.timestamp_sec for frame in actual.evidence_frames] != requested:
+                raise ValueError("Evidence timestamps do not match requested source PTS")
+        return result.model_dump()
 
 
 def create_processor():

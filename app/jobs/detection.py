@@ -4,6 +4,7 @@ The result remains internal until release validation and source JPEG checks.
 Never log this function's inputs or outputs.
 """
 from app.rules import finalize_detection
+from app.jobs.provenance import grounded_packets
 
 
 def _require(condition):
@@ -11,7 +12,7 @@ def _require(condition):
         raise ValueError("Invalid assessment integration contract")
 
 
-def finalize_bundle(original_report, bundle, *, supported_rule_ids, registry=None):
+def finalize_bundle(original_report, bundle, *, supported_rule_ids, registry=None, local_context=None):
     """Reject unexecuted prototypes and mismatched reports before finalization.
 
 An execution receipt is supplied by A, never synthesized by this adapter.
@@ -36,5 +37,13 @@ Its authenticity/quality still requires validation of A's producer locally.
     search = diagnostics.get("search")
     # A supplies this receipt; B additionally checks runs and window coverage.
     _require(isinstance(search, dict) and search.get("schema_version") == "detector_execution.v1")
-    return finalize_detection(report, bundle.get("assessments"), search,
-                              supported_rule_ids=supported_rule_ids, registry=registry)
+    packets, conflicts = grounded_packets(bundle, local_context)
+    result = finalize_detection(report, packets, search,
+                                supported_rule_ids=supported_rule_ids, registry=registry)
+    # Preserve explicit source conflicts as internal reason codes, without
+    # leaking them into the jury schema or mutating the producer's facts.
+    for conflict in conflicts:
+        for unresolved in result['unresolved']:
+            if (unresolved['rule_id'], unresolved['event_id']) == (conflict['rule_id'], conflict['event_id']):
+                unresolved['reasons'] = sorted(set(unresolved['reasons'] + conflict['reasons']))
+    return result

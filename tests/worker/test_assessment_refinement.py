@@ -122,7 +122,8 @@ class AssessmentRefinementTests(unittest.TestCase):
                 rule['source']['reviewer']='synthetic-only'
         original,bundle = self.run_case()
         decision = detection.finalize_bundle(original,bundle,
-                    supported_rule_ids=['cashier_leaves_service'],registry=registry)
+                    supported_rule_ids=['cashier_leaves_service'],registry=registry,
+                    local_context=context())
         self.assertEqual(decision['verdict'],'violation')
         self.assertEqual(len(decision['supported']),1)
 

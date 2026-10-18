@@ -33,3 +33,8 @@ class LocalGPUWorker:
 
     def evidence(self, video_path, requests, *, deadline=None):
         return self._run(extract_evidence_batch, video_path, requests, deadline=deadline)
+
+    def assess(self, video_path, report, timeout_sec=120, *, deadline=None, local_context=None):
+        from app.inference.assessments import extract_assessments
+        return self._run(extract_assessments, self.analyzer.observer, video_path, report,
+                         timeout_sec, deadline=deadline, local_context=local_context)

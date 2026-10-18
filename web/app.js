@@ -25,7 +25,7 @@ async function checkReady() {
   try {
     const state = await request("/api/v1/readiness");
     box.dataset.ready = String(state.ready);
-    box.textContent = state.ready ? "Анализ доступен. Можно загрузить запись." : "Анализ пока недоступен: нет готового обработчика с проверенными правилами.";
+    box.textContent = state.ready ? "Анализ доступен. Можно загрузить запись." : "Ключ принят. Анализ пока недоступен: нет готового обработчика с проверенными правилами.";
     return state.ready;
   } catch (error) {
     box.dataset.ready = "false";

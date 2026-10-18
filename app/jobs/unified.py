@@ -1,7 +1,7 @@
 """Versioned CV/VLM adapter to the existing rule engine and jury API.
 
 The v1 coordinator remains the baseline. A v2 receipt never pretends that the
-VLM inspected every frame of the CV scan. Activation requires a measured release.
+VLM inspected every frame of the CV scan. Reviewed and explicit signs modes are separate.
 """
 from __future__ import annotations
 
@@ -19,11 +19,13 @@ from app.inference.targeted import FACTS
 from app.inference.unified import PIPELINE_VERSION, UnifiedAnalyzer, fingerprint, _targets, _context_pts
 from app.inference.worker import WorkerBusy
 from app.jobs.evaluator import registry_digest
-from app.rules.engine import evaluate, load_registry, validate_registry, validate_report
+from app.rules.engine import (evaluate, evaluate_signs, load_registry, validate_registry,
+                              validate_report, validate_signs_registry)
 from app.video.sampling import check_deadline
 
 
 POLICY_VERSION = 'detection-targeted.v2'
+SIGNS_POLICY_VERSION = 'signs-targeted.v1'
 
 
 def require(condition):
@@ -208,6 +210,15 @@ def validate_bundle(bundle):
 
 def finalize_unified(bundle, registry, *, release=None):
     """No release: diagnostic candidates only. Validated release: scoped two-verdict policy."""
+    return _finalize_unified(bundle,registry,release=release)
+
+
+def finalize_signs(bundle, registry):
+    """Explicit two-verdict signs policy; no fabricated release or empirical review."""
+    return _finalize_unified(bundle,registry,signs=True)
+
+
+def _finalize_unified(bundle, registry, *, release=None, signs=False):
     report,episodes = validate_bundle(bundle)
     validate_registry(registry)
     if release is not None:
@@ -219,7 +230,8 @@ def finalize_unified(bundle, registry, *, release=None):
         if facts.get('service_in_progress') is True and facts.get('service_completed') is True:
             conflicts.append((packet['rule_id'],packet['event_id']))
             packet['facts']=dict.fromkeys(facts)
-    result=evaluate(report,packets,registry)
+    result=(evaluate_signs(report,packets,registry,supported_rule_ids=list(FACTS))
+            if signs else evaluate(report,packets,registry))
     # Supporting context may precede the event. Preserve the event's own bounds.
     for event in result['candidates']:
         episode=episodes[(event['rule_id'],event['event_id'])]
@@ -240,10 +252,12 @@ def finalize_unified(bundle, registry, *, release=None):
             duplicate_count+=1
         else:
             supported.append(event)
-    result.update({'schema_version':'detection_result.v2','policy_version':POLICY_VERSION,
-        'public_verdict_ready':release is not None, 'supported':supported,
-        'verdict':('violation' if supported else 'no_violation') if release is not None else None,
-        'negative_policy_version':POLICY_VERSION if release is not None else None,
+    ready=signs or release is not None
+    policy=SIGNS_POLICY_VERSION if signs else POLICY_VERSION
+    result.update({'schema_version':'detection_result.v2','policy_version':policy,
+        'public_verdict_ready':ready, 'supported':supported,
+        'verdict':('violation' if supported else 'no_violation') if ready else None,
+        'negative_policy_version':policy if ready else None,
         'duplicate_events_removed':duplicate_count,'conflicting_packets':len(conflicts),
         'manifest_sha256':fingerprint(bundle['report']['manifest'])})
     return result
@@ -271,13 +285,19 @@ class UnifiedProcessor:
         self.pipeline_version=PIPELINE_VERSION+'+'+fingerprint(analyzer.manifest)[:16]
         self._lock=Lock()
 
+    def _decision(self,bundle):
+        return finalize_unified(bundle,self.registry,release=self.release)
+
+    def _result_metadata(self):
+        return {'analysis_kind':'rules_evaluated','rules_reviewed':True}
+
     def process(self,video_path,job_id,timeout_sec):
         if not self._lock.acquire(blocking=False):
             raise WorkerBusy('GPU worker already has an active operation')
         try:
             deadline=time.monotonic()+timeout_sec
             bundle=self.analyzer.analyze(video_path,job_id,timeout_sec,deadline=deadline)
-            decision=finalize_unified(bundle,self.registry,release=self.release)
+            decision=self._decision(bundle)
             windows={w['window_id']:w for w in bundle['report']['windows']}
             events=decision['supported']
             requests={str(i):[e['anchor_sec']] for i,e in enumerate(events)}
@@ -293,18 +313,34 @@ class UnifiedProcessor:
                     'evidence_frames':frames})
             check_deadline(deadline)
             result=AnalysisResult.model_validate({'schema_version':'analysis.v1',
-                'analysis_kind':'rules_evaluated','complete':True,'coverage_scope':'full_video',
-                'rules_reviewed':True,'duration_sec':bundle['report']['video']['duration_sec'],
+                **self._result_metadata(),'complete':True,'coverage_scope':'full_video',
+                'duration_sec':bundle['report']['video']['duration_sec'],
                 'model_id':bundle['report']['model']['id'],
                 'model_revision':bundle['report']['model']['revision'],
                 'rules_version':decision['registry_version'],'pipeline_version':self.pipeline_version,
-                'negative_policy_version':POLICY_VERSION,'verdict':decision['verdict'],
+                'negative_policy_version':decision['negative_policy_version'],'verdict':decision['verdict'],
                 'violations':violations,'rule_ids':[e['rule_id'] for e in events]})
             self.last_metrics=deepcopy(bundle['metrics'])
             self.last_manifest=deepcopy(bundle['report']['manifest'])
             return result.model_dump()
         finally:
             self._lock.release()
+
+
+class SignsProcessor(UnifiedProcessor):
+    """User-selected possible-signs detector with truthful unmeasured quality metadata."""
+    def __init__(self,analyzer,registry):
+        validate_signs_registry(registry,list(FACTS))
+        self.analyzer,self.registry=analyzer,deepcopy(registry)
+        self.pipeline_version=PIPELINE_VERSION+'+'+SIGNS_POLICY_VERSION+'+'+fingerprint(analyzer.manifest)[:16]
+        self._lock=Lock()
+
+    def _decision(self,bundle):
+        return finalize_signs(bundle,self.registry)
+
+    def _result_metadata(self):
+        return {'analysis_kind':'signs_evaluated','rules_reviewed':False,
+                'source_texts_verified':True,'accuracy_status':'unmeasured'}
 
 
 def model_identity(path):
@@ -355,3 +391,10 @@ def create_processor():
     release=json.loads(Path(release_path).read_text(encoding='utf-8'))
     registry=load_registry(os.environ.get('FORTE_RULES_PATH','config/rules.yaml'))
     return UnifiedProcessor(create_analyzer(),registry,release)
+
+
+def create_signs_processor():
+    """Explicit deployment selection; preserves hypothesis and local-validation fields."""
+    registry=load_registry(os.environ.get('FORTE_RULES_PATH','config/rules.yaml'))
+    validate_signs_registry(registry,list(FACTS))
+    return SignsProcessor(create_analyzer(),registry)

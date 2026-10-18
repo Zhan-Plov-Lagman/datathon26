@@ -87,6 +87,34 @@ def evaluate(report, assessments, registry=None):
     This intentionally does not return a public no_violation verdict. Missing
     fact extraction / unknown exceptions / unreviewed law are unresolved work.
     """
+    return _evaluate(report,assessments,registry)
+
+
+def validate_signs_registry(registry, supported_rule_ids):
+    """Verify public source text and explicit scope, without claiming detector validation."""
+    validate_registry(registry)
+    require(isinstance(supported_rule_ids,(list,tuple)) and bool(supported_rule_ids))
+    require(all(isinstance(rule_id,str) for rule_id in supported_rule_ids))
+    require(len(set(supported_rule_ids))==len(supported_rule_ids))
+    rules={r['rule_id']:r for r in registry['rules']}
+    for rule_id in supported_rule_ids:
+        require(rule_id in rules)
+        rule=rules[rule_id]
+        require(rule['status'] in ('hypothesis','reviewed'))
+        source=rule.get('source',{})
+        require(source.get('text_verified') is True)
+        for key in ('document','clause','url'):
+            require(isinstance(source.get(key),str) and bool(source[key].strip()))
+        require(source['url'].startswith('https://') and len(source['url'])>8)
+
+
+def evaluate_signs(report, assessments, registry, *, supported_rule_ids):
+    """Evaluate possible signs under verified public sources; accuracy remains unmeasured."""
+    validate_signs_registry(registry,supported_rule_ids)
+    return _evaluate(report,assessments,registry,signs_rule_ids=set(supported_rule_ids))
+
+
+def _evaluate(report, assessments, registry=None, *, signs_rule_ids=None):
     registry = load_registry() if registry is None else registry
     validate_registry(registry)
     windows = validate_report(report)
@@ -97,6 +125,8 @@ def evaluate(report, assessments, registry=None):
         require(isinstance(packet, dict))
         require(packet.get("rule_id") in rules)
         rule = rules[packet["rule_id"]]
+        if signs_rule_ids is not None:
+            require(rule['rule_id'] in signs_rule_ids)
         event_id = packet.get("event_id")
         require(isinstance(event_id, str) and bool(event_id))
         identity = (rule["rule_id"], event_id)
@@ -131,7 +161,7 @@ def evaluate(report, assessments, registry=None):
         exceptions = [k for k in rule["exceptions"] if facts.get(k) is True]
         missing = [k for k in positive + rule["exceptions"] if facts.get(k) is None]
         reasons = []
-        if rule["status"] != "reviewed":
+        if signs_rule_ids is None and rule["status"] != "reviewed":
             reasons.append("rule_not_reviewed")
         if missing:
             reasons.append("unknown_facts_or_exceptions")
@@ -149,7 +179,9 @@ def evaluate(report, assessments, registry=None):
                   "missing": missing, "decision": decision, "reasons": reasons}
         if decision == "supported":
             source = rule["source"]
-            result["description"] = (f'{rule["explanation"]} Основание: {source["document"]}, '
+            explanation=(rule['explanation'] if signs_rule_ids is None else
+                f'Обнаружены признаки возможного нарушения: {rule["title"]}.')
+            result["description"] = (f'{explanation} Основание: {source["document"]}, '
                                      f'п. {source["clause"]}. {source["url"]}')
         results.append(result)
     return {"schema_version": "rule_results.v1", "job_id": report.get("job_id"),

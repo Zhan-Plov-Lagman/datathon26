@@ -1,3 +1,47 @@
+# Актуальная передача A: публичный signs-режим, 18 октября 2026
+
+Публичный адрес: [https://ig2ykzpxi9fgxy-8000.proxy.runpod.net](https://ig2ykzpxi9fgxy-8000.proxy.runpod.net/). HTTPS/health/readiness доступны; внешняя
+проверка API прошла 6/6 с действующим серверным ключом жюри. Локальный `.env`
+намеренно содержит другой ключ; не переносить его на сервер вместо действующего.
+Секреты передаются отдельно, без включения в Git или эту документацию.
+
+Фабрика `app.jobs.unified:create_signs_processor` использует реальную локальную
+Qwen3-VL-32B FP8/vLLM, RT-DETR и OWLv2. Охват — ровно два класса из `FACTS`.
+Источник должен иметь проверенный текст и полную публичную ссылку; статусы правил
+остаются `hypothesis`, локальная валидация — false. Политика `signs-targeted.v1`
+не создаёт принятого релиза и не объявляет измеренную точность. Неизвестные факты
+сохраняются; технически неполный проход остаётся ошибкой.
+
+Реальный development-MOV длительностью 11,633 с прошёл публичный HTTPS → очередь
+→ GPU → `done` за 7,122 с. Получено 0 событий / 0 JPEG; это не положительная
+проверка доказательств. API + signs: 124 passed за 23,09 с; браузер: 4 passed за
+24,83 с; прежняя регрессия правил: 30 passed + 6 subtests.
+
+Реальный daemon использует `InprocClient` / `UniProcExecutor` и
+`VLLM_ENABLE_V1_MULTIPROCESSING=0`. Загрузка 168,237 с, bootstrap с синтетической
+генерацией 174,875 с; закрытие полностью освободило GPU. Повторная загрузка
+61,013 с; принудительный дедлайн 1 с завершил дочерний процесс за 1,634 с,
+процессов-сирот не осталось. Эти проверки не заменяют полный lifecycle supervisor.
+
+Текущий процесс запущен вручную через `setsid`/`nohup`. У supervisor прошли
+`bash -n` и отказ при уже запущенных API/worker (exit 1). Полный запуск и обработка
+сигналов supervisor ещё не проверены. Длинный MOV 142,533 с завершился через
+публичный путь за 101,393 с, 0 событий / 0 JPEG. Повреждённый синтетический MOV
+дал `failed/analysis_failed`; после него readiness снова HTTP 200/true, а
+повторный короткий реальный MOV завершился за 7,084 с, 0 событий / 0 JPEG.
+
+Продолжать с [PUBLIC_SERVICE_VERIFICATION.md](PUBLIC_SERVICE_VERIFICATION.md).
+Не повторять загрузки и уже пройденные проверки без новой причины. Следующие
+измерения качества — подтверждённые положительные/сложные отрицательные случаи,
+таймкоды и исходные JPEG; качество нельзя вывести из числа успешных HTTP-запросов.
+
+Этот handoff заменяет прежние блокеры readiness/обязательного validated release
+для явного signs-режима. Исторический reviewed-release путь остаётся отдельным.
+
+---
+
+## Предыдущие передачи A — сохранённая хронология
+
 ## Frontend integration verified, 18 October 2026
 
 Friend UI commits 0de2b5e and a088ff9 were fast-forwarded into the integration branch and published to the team's main branch. API/browser checks: 98 passed, 4 warnings in 47.67 seconds. Five web assets are installed on the team's Runpod; all local HTTP responses match commit a088ff9. Live API access checks: 6/6 PASS. Public proxy still returns 404; authenticated readiness remains 503/false without a ready real worker. See docs/UI_INTEGRATION_VERIFICATION.md for reproducible scope and remaining work. This does not claim detector accuracy or a complete public analysis service.

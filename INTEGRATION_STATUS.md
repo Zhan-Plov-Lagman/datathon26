@@ -1,3 +1,47 @@
+# Текущий результат: публичный signs-режим, 18 октября 2026
+
+**Технический публичный путь работает на проверенном коротком видео; точность
+распознавания остаётся неизмеренной.** Адрес: [https://ig2ykzpxi9fgxy-8000.proxy.runpod.net](https://ig2ykzpxi9fgxy-8000.proxy.runpod.net/).
+Health HTTP 200, readiness HTTP 200/true; 6/6 внешних `check_api` прошли с
+действующим серверным ключом жюри. Ключ не публикуется. Значение в локальном
+`.env` намеренно отличается от серверного и не является его заменой.
+
+Явная фабрика `create_signs_processor` / `signs-targeted.v1` не требует выдуманного
+акта приёмки. Источники текста проверены, но реестр сохраняет `hypothesis` и
+`validated_on_local_cases=false`; метаданные: `rules_reviewed=false`,
+`source_texts_verified=true`, `accuracy_status=unmeasured`. Реализованы только
+`cashier_leaves_service` и `personal_items_storage`. Неизвестные/конфликтующие
+факты не подтверждают событие; незавершённая обработка не становится отрицанием.
+
+| Проверка | Фактический результат | Граница вывода |
+|---|---|---|
+| API + signs policy | 124 passed, 23,09 с | Синтетические проверки кода |
+| Браузер | 4 passed, 24,83 с | Интерфейс, не качество детектора |
+| Регрессия правил | 30 passed + 6 subtests | Существующее поведение сохранено |
+| Внешний `check_api` | 6/6 PASS | Доступ и контракт API |
+| Реальный MOV 11,633 с через публичный HTTPS → очередь → 32B FP8 GPU → ответ | `done` за 7,122 с; 0 событий, 0 JPEG | Не проверяет положительное событие/JPEG |
+| Реальный MOV 142,533 с через тот же публичный путь | `done` за 101,393 с; 0 событий, 0 JPEG | Проверен один длинный development-вход, не p95 |
+| Повреждённый синтетический MOV | `failed`, код `analysis_failed`; затем readiness HTTP 200/true | Ошибка не стала отрицательным вердиктом |
+| Короткий реальный MOV после ошибки | `done` за 7,084 с; 0 событий, 0 JPEG | Подтверждено восстановление обработки |
+| Реальный daemon, первая загрузка / bootstrap с синтетической генерацией | 168,237 / 174,875 с | Холодный старт, отдельно от времени задания |
+| Закрытие daemon | GPU полностью освобождён | Проверен фактический процесс |
+| Повторная загрузка / остановка по дедлайну 1 с | 61,013 / 1,634 с; без процессов-сирот | Проверена принудительная остановка |
+| Supervisor | `bash -n` PASS; дубликаты API/worker отклонены, exit 1 | Полный startup/signal lifecycle не проверен |
+
+Daemon использует `InprocClient` / `UniProcExecutor`, профиль
+`VLLM_ENABLE_V1_MULTIPROCESSING=0`; фактический запуск выполнен вручную через
+`setsid`/`nohup`. Положительное событие и его JPEG через публичный API на реальном
+видео пока не наблюдались; успешные ответы не подтверждают качество распознавания.
+
+Подробности: [PUBLIC_SERVICE_VERIFICATION.md](docs/PUBLIC_SERVICE_VERIFICATION.md).
+Этот раздел заменяет прежние текущие утверждения о 404/readiness false и
+validated release как обязательном блокере signs-режима. История ниже сохранена;
+её старые ограничения не описывают автоматически последний запуск.
+
+---
+
+## Исторические этапы интеграции
+
 ## Frontend integration verified, 18 October 2026
 
 Friend UI commits 0de2b5e and a088ff9 were fast-forwarded into the integration branch and published to the team's main branch. API/browser checks: 98 passed, 4 warnings in 47.67 seconds. Five web assets are installed on the team's Runpod; all local HTTP responses match commit a088ff9. Live API access checks: 6/6 PASS. Public proxy still returns 404; authenticated readiness remains 503/false without a ready real worker. See docs/UI_INTEGRATION_VERIFICATION.md for reproducible scope and remaining work. This does not claim detector accuracy or a complete public analysis service.

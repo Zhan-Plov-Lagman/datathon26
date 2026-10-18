@@ -51,10 +51,12 @@ class Violation(StrictModel):
 class AnalysisResult(StrictModel):
     """Private, versioned result. Observation reports cannot validate as this type."""
     schema_version: Literal["analysis.v1"]
-    analysis_kind: Literal["rules_evaluated"]
+    analysis_kind: Literal["rules_evaluated", "signs_evaluated"]
     complete: Literal[True]
     coverage_scope: Literal["full_video"]
-    rules_reviewed: Literal[True]
+    rules_reviewed: bool
+    source_texts_verified: bool | None = None
+    accuracy_status: Literal["unmeasured"] | None = None
     duration_sec: Annotated[float, Field(gt=0)]
     model_id: Text
     model_revision: Text
@@ -67,12 +69,20 @@ class AnalysisResult(StrictModel):
 
     @model_validator(mode="after")
     def consistent(self):
+        if self.analysis_kind == "rules_evaluated":
+            if self.rules_reviewed is not True:
+                raise ValueError("Reviewed evaluation requires reviewed rules")
+        else:
+            if (self.rules_reviewed is not False or self.source_texts_verified is not True
+                    or self.accuracy_status != "unmeasured"
+                    or self.negative_policy_version != "signs-targeted.v1"):
+                raise ValueError("Signs evaluation requires explicit source and quality metadata")
         if (self.verdict == "violation") != bool(self.violations):
             raise ValueError("Verdict and events disagree")
         if self.verdict == "no_violation" and self.negative_policy_version is None:
-            raise ValueError("No violation requires a reviewed negative decision policy")
+            raise ValueError("No violation requires an explicit negative decision policy")
         if len(self.rule_ids) != len(self.violations):
-            raise ValueError("Each event needs its reviewed rule id")
+            raise ValueError("Each event needs its source rule id")
         for event in self.violations:
             if event.timecode_sec > self.duration_sec:
                 raise ValueError("Event lies outside video")

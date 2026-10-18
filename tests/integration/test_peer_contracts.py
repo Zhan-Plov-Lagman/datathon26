@@ -1,6 +1,8 @@
 """Synthetic-only tests against actual fetched B/C modules, without merging branches."""
 import base64
+import copy
 import importlib
+import json
 import os
 import subprocess
 import tempfile
@@ -9,6 +11,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 from app.inference.worker import LocalGPUWorker, WorkerBusy
+from app.inference.assessments import parse_candidates
+from app.inference.departure import VERSION, parse_features
+from app.inference.schema import ModelOutputError
 from app.video.sampling import VideoError
 
 
@@ -22,6 +27,32 @@ class SyntheticObserver:
                                   "start_sec": frames[0].timestamp_sec,
                                   "end_sec": frames[-1].timestamp_sec,
                                   "description": "Synthetic color pattern"}]}
+
+
+class SyntheticDetectionObserver(SyntheticObserver):
+    """Scripted responses ONLY for generated color fixtures; no model accuracy claim."""
+    fail = False
+    empty = False
+
+    def _observe_once(self, frames, previous_context, deadline, *, parser, **kwargs):
+        if self.fail:
+            raise ModelOutputError('invalid_schema')
+        times = [f.timestamp_sec for f in frames]
+        if parser is parse_candidates:
+            data = {'operation_context':'Synthetic fixture', 'visibility_limits':[],
+                    'observations':[], 'episodes':[]}
+            if not self.empty:
+                data['observations'] = [{'start_frame':0, 'end_frame':len(frames)-1,
+                                         'description':'Synthetic object crosses a test boundary'}]
+                data['episodes'] = [{'inside_frame':0, 'anchor_frame':1,
+                                     'last_frame':len(frames)-1, 'observation_indices':[0]}]
+        elif parser is parse_features:
+            data = {'same_person':True, 'cash_from_customer':True, 'cash_handling':True,
+                    'visible_crossing':True, 'feet':[[.2,.5]]+[[.8,.5]]*(len(frames)-1),
+                    'handover_active':[True]*len(frames)}
+        else:
+            raise AssertionError('Unexpected synthetic stage')
+        return parser(json.dumps(data), times)
 
 
 @unittest.skipUnless(os.environ.get("FORTE_PEER_SNAPSHOT"), "Set FORTE_PEER_SNAPSHOT to prepared peer snapshot")
@@ -126,3 +157,84 @@ class PeerContractTests(unittest.TestCase):
         with patch.object(self.worker, "analyze", side_effect=WorkerBusy()):
             with self.assertRaises(WorkerBusy):
                 processor.process(self.video, "synthetic-busy", 30)
+
+    def detection_evaluator(self, with_context=True):
+        evaluator = importlib.import_module('app.jobs.evaluator')
+        self.assertTrue(Path(evaluator.__file__).resolve().is_relative_to(self.snapshot))
+        registry = copy.deepcopy(self.engine.load_registry(self.snapshot/'config/rules.yaml'))
+        for rule in registry['rules']:
+            if rule['rule_id'] == 'cashier_leaves_service':
+                rule.update(status='reviewed', validated_on_local_cases=True)
+                rule['source']['reviewer'] = 'SYNTHETIC TEST ONLY'
+        release = {'validation_reference':'SYNTHETIC TEST ONLY',
+                   'registry_sha256':evaluator.registry_digest(registry),
+                   'model_id':SyntheticObserver.model_id,
+                   'model_revision':SyntheticObserver.model_revision,
+                   'detector_versions':{'cashier_leaves_service':VERSION},
+                   'policy_version':'detection-policy.v1'}
+
+        def synthetic_context(report):
+            return {'schema_version':'local_context.draft.v1', 'view_id':'synthetic',
+                    'context_version':'test', 'reviewer':'SYNTHETIC TEST ONLY',
+                    'reviewed_at':'synthetic-date', 'basis_ref':'synthetic-fixture',
+                    'coordinate_space':'normalized_display_after_rotation',
+                    'scope':{'job_id':report['job_id'], 'display_width':96,
+                             'display_height':64, 'rotation':0},
+                    'workplace_polygon':[[.1,.1],[.5,.1],[.5,.9],[.1,.9]],
+                    'adjacent_equipment_included':False, 'max_transition_gap_sec':1,
+                    'cash_context_confirmation':{'value':True,'basis_ref':'synthetic'},
+                    'functional_role_confirmation':{'value':True,'basis_ref':'synthetic'}}
+        return evaluator.DetectionEvaluator(registry=registry, release=release,
+                       context_provider=synthetic_context if with_context else None)
+
+    def test_current_evaluator_uses_actual_worker_refinement_context_budget_and_jpeg(self):
+        worker = LocalGPUWorker(SyntheticDetectionObserver())
+        processor = self.pipeline.IntegratedProcessor(worker, self.detection_evaluator())
+        with patch.object(worker, 'analyze', wraps=worker.analyze) as analyze, \
+             patch.object(worker, 'assess', wraps=worker.assess) as assess, \
+             patch.object(worker, 'evidence', wraps=worker.evidence) as evidence:
+            result = processor.process(self.video, 'synthetic-evaluator', 30)
+        self.assertEqual(result['verdict'], 'violation')
+        self.assertEqual(len(result['violations']), 1)
+        self.assertEqual(analyze.call_args.kwargs['deadline'], assess.call_args.kwargs['deadline'])
+        self.assertEqual(assess.call_args.kwargs['deadline'], evidence.call_args.kwargs['deadline'])
+        self.assertGreater(assess.call_args.kwargs['timeout_sec'], 0)
+        self.assertLess(assess.call_args.kwargs['timeout_sec'], 25)
+        self.assertEqual(assess.call_args.kwargs['local_context']['scope']['job_id'], 'synthetic-evaluator')
+        event = result['violations'][0]
+        frame = event['evidence_frames'][0]
+        self.assertEqual(frame['timestamp_sec'], event['timecode_sec'])
+        self.assertTrue(base64.b64decode(frame['image_base64']).startswith(b'\xff\xd8'))
+
+    def test_current_evaluator_preserves_unknown_and_accepts_executed_empty_search(self):
+        for empty in (False, True):
+            with self.subTest(empty=empty):
+                observer = SyntheticDetectionObserver(); observer.empty = empty
+                worker = LocalGPUWorker(observer)
+                captured = []
+                actual_assess = worker.assess
+                def capture(*args, **kwargs):
+                    bundle = actual_assess(*args, **kwargs)
+                    captured.append(bundle)
+                    return bundle
+                processor = self.pipeline.IntegratedProcessor(worker, self.detection_evaluator(False))
+                with patch.object(worker, 'assess', side_effect=capture), \
+                     patch.object(worker, 'evidence', wraps=worker.evidence) as evidence:
+                    result = processor.process(self.video, 'synthetic-unknown', 30)
+                self.assertEqual(result['verdict'], 'no_violation')
+                self.assertEqual(result['violations'], [])
+                evidence.assert_not_called()
+                self.assertTrue(all(v is None for p in captured[0]['assessments'] for v in p['facts'].values()))
+                self.assertEqual(bool(captured[0]['assessments']), not empty)
+
+    def test_current_evaluator_does_not_hide_failure_and_same_worker_recovers(self):
+        observer = SyntheticDetectionObserver(); observer.fail = True
+        worker = LocalGPUWorker(observer)
+        processor = self.pipeline.IntegratedProcessor(worker, self.detection_evaluator())
+        with self.assertRaises(ModelOutputError):
+            processor.process(self.video, 'synthetic-error', 30)
+        observer.fail = False
+        self.assertEqual(processor.process(self.video, 'synthetic-recovery', 30)['verdict'], 'violation')
+        with worker._lock:
+            with self.assertRaises(WorkerBusy):
+                processor.process(self.video, 'synthetic-busy', 30)

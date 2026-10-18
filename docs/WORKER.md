@@ -5,12 +5,14 @@
 ```python
 import time
 
+local_context = None  # либо применимый контекст, подтверждённый внутри команды
 remaining_sec = deadline - time.monotonic()  # общий бюджет задания
 bundle = worker.assess(video_path, report, timeout_sec=remaining_sec,
-                       deadline=deadline, local_context=None)
+                       deadline=deadline, local_context=local_context)  # None, если контекста нет
 # После согласования готовности детектора и реестра с B/C:
 # decision = finalize_bundle(report, bundle,
-#     supported_rule_ids=["cashier_leaves_service"], registry=registry)
+#     supported_rule_ids=["cashier_leaves_service"], registry=registry,
+#     local_context=local_context)
 ```
 
 Метод использует тот же worker, модель и общий deadline. Проверяет метаданные и реальные PTS исходного видео. Вызывающий отвечает за принадлежность пары видео/отчёт одному заданию. Исходные окна остаются неизменными; новые наблюдения добавляются с уникальными ID. Ссылки assessments относятся к выходному bundle.report. Ошибка декодирования, формата или дедлайна пробрасывается; успешного receipt при ней нет. На ошибку JSON или структуры — один повтор для каждой стадии в том же бюджете. Повтор получает напоминание о точной схеме и допустимых индексах; повторная ошибка остаётся отказом.
@@ -40,6 +42,8 @@ refinement_status=completed означает завершение всех на�
 
 **Бюджет C:** передавать оставшееся время явно в timeout_sec и тот же deadline. Значение по умолчанию assess 120 с — отдельный потолок, который не увеличивается от передачи более позднего deadline. Новый реальный пример 16,533 с потребовал 127,750 с только assess даже после оптимизации; 120 с для него недостаточно. Не сбрасывать дедлайн между стадиями.
 
+**Проверка C 1cd53b3 / B 2ac8f3c:** новый DetectionEvaluator уже передаёт отдельный контекст в assess и finalize_bundle и оставляет резерв 5 с. Проверено с A v0.4 на синтетическом MOV через настоящий LocalGPUWorker, политику B, evaluator C и JPEG: 44 worker + 8 integration. Общий deadline, отрицательная политика при null/пустом завершённом поиске и восстановление после отказа проверены. Новые provenance-проверки также принимают сохранённые реальные пакеты, но рабочий контекст и качество пока не подтверждены. Полный HTTP/GPU-прогон этими тестами не заменён. Подробнее — актуальное начало INTEGRATION_A.md.
+
 **Воспроизведение технического запуска** (новая папка, только ранее использованный для разработки ролик):
 
 ```powershell
@@ -53,9 +57,10 @@ refinement_status=completed означает завершение всех на�
 **Синтетические тесты реального стыка B/C** (без merge):
 
 ```powershell
-.\.venv\Scripts\python.exe scripts/prepare_peer_contracts.py --b-ref 03a1f31 --c-ref 476976c --output .cache/peer-contracts-check
+.\.venv\Scripts\python.exe scripts/prepare_peer_contracts.py --b-ref 2ac8f3c --c-ref 1cd53b3 --output .cache/peer-contracts-check
 $env:FORTE_PEER_SNAPSHOT=(Resolve-Path .cache/peer-contracts-check).Path
 .\.venv\Scripts\python.exe -m unittest discover -s tests/worker -q
+.\.venv\Scripts\python.exe -m unittest discover -s tests/integration -q
 ```
 
 Тестовый реестр с reviewed создаётся исключительно в памяти синтетического теста. Настоящий реестр не меняется. Сохранённый реальный пакет принят evaluate B как candidate; finalize_bundle с реальным hypothesis-реестром ожидаемо отказал. Это не успешный публичный сквозной прогон.

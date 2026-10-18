@@ -101,3 +101,27 @@ def motion_signal(track,threshold=.12):
     a,b=track.box,track.previous_box
     delta=math.hypot((a[0]+a[2]-b[0]-b[2])/2,(a[1]+a[3]-b[1]-b[3])/2)
     return dt>0 and delta/dt>=threshold
+
+
+def coalesce_reviews(windows, max_span_sec=20.):
+    """Union overlapping review intervals within a declared bounded span.
+
+    Every input interval remains wholly covered, with all its actors/reasons.
+    The consumer must increase its frame count to preserve sampling density.
+    """
+    if not math.isfinite(max_span_sec) or max_span_sec<=0:
+        raise ValueError('Invalid maximum review span')
+    merged=[]
+    for window in sorted(windows,key=lambda w:(w.start_sec,w.end_sec)):
+        if window.end_sec-window.start_sec>max_span_sec+1e-6:
+            raise ValueError('Input review exceeds maximum span')
+        if (merged and window.start_sec<=merged[-1].end_sec
+            and max(window.end_sec,merged[-1].end_sec)-merged[-1].start_sec<=max_span_sec+1e-6):
+            target=merged[-1]
+            target.end_sec=max(target.end_sec,window.end_sec)
+            target.reasons.update(window.reasons)
+            target.actor_ids.update(window.actor_ids)
+        else:
+            merged.append(CandidateWindow(window.start_sec,window.end_sec,
+                set(window.reasons),set(window.actor_ids)))
+    return merged

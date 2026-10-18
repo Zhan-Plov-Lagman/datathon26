@@ -1,3 +1,21 @@
+# Unified integration update, 18 October 2026
+
+Current implementation work is in the separate Desktop integration copy (branch
+`integration/forte-unified`), not in the original Role A checkout. The original
+projects and personal prompt remain preserved. See `INTEGRATION_STATUS.md` and
+`docs/UNIFIED_PIPELINE.md` for current code, measurements and remaining work.
+
+The L40S uses real local Qwen3-VL-32B NF4, RT-DETR and OWLv2. The v2 producer,
+provenance validator, rule adapter and processor are now implemented. No genuine
+rule registry or public release has been activated. Synthetic successes must not
+be presented as measured bank detection accuracy. Four development videos were
+transferred directly to the team's rented server; no scene content enters cloud
+assistant output. Continue from the recorded real failures and corrections.
+
+The material below is the preserved earlier A baseline handoff.
+
+---
+
 # Текущий этап A + поддержка B, 18 октября: departure-visual.v0.4
 
 Пользователь поручил A временно взять также работу B. Для B создан отдельный worktree .cache/rules-eval-a-support от 03a1f31 и опубликован 45193d5 в feature/rules-eval-a-support; исходная ветка B сохранена. Код C 476976c прочитан и проверен через отдельный снимок, без merge в A.

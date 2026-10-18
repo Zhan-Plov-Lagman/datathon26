@@ -68,7 +68,11 @@ def main():
     except (ValueError, TypeError):
         print("BLOCKED: invalid coordinator settings; check local .env without sharing keys.")
         return 2
-    if not os.environ.get("FORTE_RULES_FACTORY"):
+    factory=os.environ.get('FORTE_PROCESSOR_FACTORY','app.jobs.pipeline:create_processor')
+    if factory=='app.jobs.unified:create_processor' and not os.environ.get('FORTE_UNIFIED_RELEASE'):
+        print('BLOCKED: FORTE_UNIFIED_RELEASE missing; measured detector acceptance is required.')
+        return 2
+    if factory=='app.jobs.pipeline:create_processor' and not os.environ.get("FORTE_RULES_FACTORY"):
         print("BLOCKED: FORTE_RULES_FACTORY missing; A/B facts and reviewed evaluator are required.")
         return 2
     try:

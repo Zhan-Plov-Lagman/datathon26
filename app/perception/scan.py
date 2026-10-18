@@ -5,11 +5,11 @@ import time
 
 from app.video.sampling import probe_video, check_deadline
 from app.perception.stream import iter_batches
-from app.perception.temporal import Tracker, motion_signal, plan_reviews
+from app.perception.temporal import Tracker, motion_signal, plan_reviews, coalesce_reviews
 
 
 def scan_video(path, people, objects, *, job_id, timeout_sec=240., deadline=None,
-               fps=3., object_period_sec=5., max_long_edge=960):
+               fps=3., object_period_sec=5., max_long_edge=960, review_span_sec=None):
     if not all(math.isfinite(x) and x>0 for x in (timeout_sec, object_period_sec)):
         raise ValueError('Positive processing budgets required')
     deadline=min(deadline or float('inf'),time.monotonic()+timeout_sec)
@@ -48,6 +48,9 @@ def scan_video(path, people, objects, *, job_id, timeout_sec=240., deadline=None
     if not samples or not object_samples:
         raise ValueError('Empty CV execution')
     windows=plan_reviews(info.duration_sec,signals)
+    original_window_count=len(windows)
+    if review_span_sec is not None:
+        windows=coalesce_reviews(windows,review_span_sec)
     return {
         'schema_version':'perception.v1','job_id':job_id,'complete':True,
         'coverage_scope':'full_video_sampled','duration_sec':info.duration_sec,
@@ -57,6 +60,7 @@ def scan_video(path, people, objects, *, job_id, timeout_sec=240., deadline=None
                            'reasons':sorted(w.reasons),'actor_ids':sorted(w.actor_ids)} for w in windows],
         'metrics':{'elapsed_sec':round(time.monotonic()-started,3),
                    'people_frames':len(samples),'object_frames':len(object_samples),
+                   'original_review_windows':original_window_count,
                    'review_windows':len(windows)},
         'limitations':['Sampling does not establish continuous visibility.',
                        'Track IDs are local hypotheses; no cashier identity is assigned.'],

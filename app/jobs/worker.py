@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import json
+import math
 import multiprocessing
 import os
 import threading
@@ -54,7 +55,7 @@ class ProcessorProcess:
                 raise RuntimeError("Pipeline startup timed out")
             hello = self.pipe.recv()
             if not hello["ready"]:
-                raise RuntimeError("Pipeline unavailable: check local models and reviewed FORTE_RULES_FACTORY")
+                raise RuntimeError("Pipeline unavailable: check local models and configured detector release")
             self.version = hello["pipeline_version"]
         except BaseException:
             self.close()
@@ -144,9 +145,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--coordinator", default=os.environ.get("FORTE_COORDINATOR", "http://127.0.0.1:8001"))
     parser.add_argument("--worker-id", default=os.environ.get("FORTE_WORKER_ID", "gpu-a"))
-    parser.add_argument("--factory", default="app.jobs.pipeline:create_processor")
+    parser.add_argument("--factory", default=os.environ.get('FORTE_PROCESSOR_FACTORY','app.jobs.pipeline:create_processor'))
+    parser.add_argument('--startup-timeout',type=float,default=os.environ.get('FORTE_STARTUP_TIMEOUT','180'))
     parser.add_argument("--work-dir", type=Path, default=Path(os.environ.get("LOCALAPPDATA", str(Path.home() / ".local/share"))) / "Datathon26/worker")
     args = parser.parse_args()
+    if not math.isfinite(args.startup_timeout) or args.startup_timeout<=0:
+        parser.error('Startup timeout must be positive and finite')
     url = urlsplit(args.coordinator)
     if url.scheme not in ("http", "https") or not url.hostname or url.username or url.query or url.fragment:
         parser.error("Use a private coordinator HTTP(S) URL without credentials or query")
@@ -162,7 +166,7 @@ def main():
                 if processor is None or not processor.process.is_alive():
                     if processor:
                         processor.close()
-                    processor = ProcessorProcess(args.factory)
+                    processor = ProcessorProcess(args.factory,startup_timeout=args.startup_timeout)
                 hello = {"worker_id": args.worker_id, "ready": True, "pipeline_version": processor.version}
                 try:
                     claimed_at = time.monotonic()

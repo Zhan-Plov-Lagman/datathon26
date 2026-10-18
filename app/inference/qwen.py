@@ -137,6 +137,11 @@ class QwenObserver:
             except ModelOutputError as exc:
                 exc.generated_tokens = int(generated.shape[-1])
                 exc.hit_token_limit = exc.generated_tokens >= self.max_new_tokens
+                # Optional private diagnostic sink. Never print raw responses.
+                sink=getattr(self,'_invalid_response_sink',None)
+                if sink is not None:
+                    sink(raw,{'reason':exc.reason,'generated_tokens':exc.generated_tokens,
+                              'hit_token_limit':exc.hit_token_limit,'frame_count':len(frames)})
                 raise
         finally:
             del inputs

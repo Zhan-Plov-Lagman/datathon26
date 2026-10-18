@@ -8,6 +8,7 @@
 - [Согласованный план](INTEGRATION_PLAN.md) — локальный документ.
 - [Запуск и локальные зависимости](docs/UNIFIED_SETUP.md).
 - [Runpod L40S и Qwen32B: проверенные команды](docs/RUNPOD_SETUP.md).
+- [Новый путь CV → адресная Qwen → правила → API](docs/UNIFIED_PIPELINE.md).
 - [Происхождение компонентов](docs/COMPONENT_PROVENANCE.md).
 - [Исходная документация основы](docs/README_ORIGINAL_BASE.md).
 

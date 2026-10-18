@@ -1,3 +1,8 @@
+## Frontend integration verified, 18 October 2026
+
+Friend UI commits 0de2b5e and a088ff9 were fast-forwarded into the integration branch and published to the team's main branch. API/browser checks: 98 passed, 4 warnings in 47.67 seconds. Five web assets are installed on the team's Runpod; all local HTTP responses match commit a088ff9. Live API access checks: 6/6 PASS. Public proxy still returns 404; authenticated readiness remains 503/false without a ready real worker. See docs/UI_INTEGRATION_VERIFICATION.md for reproducible scope and remaining work. This does not claim detector accuracy or a complete public analysis service.
+
+---
 ## Latest verified stage: v1.4 and backend comparison, 18 October 2026
 
 Two explicitly authorized ultra agents implemented/refined bounded parent context and audited the isolated vLLM adapter. Final combined Windows checks: 55 passed, 1 warning in 43.52 seconds. Strict facts grammar is exercised through the actual targeted review call; incomplete generation remains failure.

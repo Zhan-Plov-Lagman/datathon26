@@ -33,12 +33,14 @@ def test_two_verdicts_remain_internal(unknown):
     assert bundle == before
 
 
-def test_actual_a_prototype_cannot_be_negative():
+def test_unexecuted_a_bundle_cannot_be_negative():
     report, _, registry, scope = setup_bundle()
     # Real A bundle builder, synthetic observations only.
     results = [dict(operation_context='synthetic', visibility_limits=[], observations=[], episodes=[])]
     prototype = build_bundle(report, results)
-    with pytest.raises(ValueError, match='integration contract'):
+    # A now supplies the schema even without execution, but detector_runs is
+    # empty. B must reject that receipt rather than infer a negative verdict.
+    with pytest.raises(RuleInputError):
         finalize_bundle(report, prototype, registry=registry, supported_rule_ids=scope)
 
 

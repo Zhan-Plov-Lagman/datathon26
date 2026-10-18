@@ -34,7 +34,7 @@ Its authenticity/quality still requires validation of A's producer locally.
     diagnostics = bundle.get("diagnostics")
     _require(isinstance(diagnostics, dict))
     search = diagnostics.get("search")
-    # The current A prototype intentionally has no execution receipt.
+    # A supplies this receipt; B additionally checks runs and window coverage.
     _require(isinstance(search, dict) and search.get("schema_version") == "detector_execution.v1")
     return finalize_detection(report, bundle.get("assessments"), search,
                               supported_rule_ids=supported_rule_ids, registry=registry)

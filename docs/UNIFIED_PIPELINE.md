@@ -18,8 +18,8 @@ The original `LocalGPUWorker`/v1 coordinator remains available for comparison.
    pass and calls the already loaded Qwen for each window. It does not run the
    old full-video Qwen overview and then repeat that overview inside `assess`.
 4. Every proposed episode receives a dense window of up to 4 s / 6 actual PTS.
-   Exactly identical refinement intervals share one call. Final fact packets
-   come only from these dense windows. Every scheduled call completes or the
+   Exactly identical refinement intervals share one call. Final event anchors come from these dense windows; v1.4 retains up to six
+   parent-context frames as supporting evidence without changing event bounds. Every scheduled call completes or the
    job fails. There is one schema/JSON retry per call within the same deadline.
 5. `app/jobs/unified.py` validates v2 provenance, projects selected observations
    to B's v1 **interval** interface, evaluates facts, and extracts source JPEGs
@@ -145,3 +145,8 @@ Remaining work includes representative positive/hard-negative examples, event
 type/time/JPEG checks, full video quality and latency, comparison with 8B and
 alternative people detectors, remaining rule scope, and public service rollout.
 Do not repeat model setup or all completed benchmarks without a diagnostic need.
+
+
+## v1.4 context handoff
+
+Refinement retains six scheduled dense targets over up to four seconds and up to six actual parent-review frames spread across available context outside that interval. Parent images are reused with their original PTS. The whole supplied interval is not dense or continuously visible. Events must anchor to dense frames; supporting facts can cite the retained context without expanding event bounds. The receipt records scheduled targets, aligned decoded PTS, separate dense/context PTS and exact parent window IDs. Validator accepts legacy v1.3 receipts and validates the new fields for v1.4. Every assigned call and retry shares the original deadline. This is a technical context correction, not measured detection accuracy or release approval.

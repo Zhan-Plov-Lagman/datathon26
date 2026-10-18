@@ -20,10 +20,10 @@ from app.perception.temporal import iou
 from app.video.sampling import check_deadline, probe_video, sample_frames
 
 
-PIPELINE_VERSION = 'cv-targeted.v1.3'
+PIPELINE_VERSION = 'cv-targeted.v1.4'
 PREPROCESSING = {'cv_fps':3., 'object_period_sec':5., 'cv_edge':960,
                  'review_frames':12, 'review_span_sec':20., 'review_edge':768,
-                 'refine_sec':4., 'refine_frames':6}
+                 'refine_sec':4., 'refine_frames':6, 'refine_context_frames':6}
 
 
 def fingerprint(value):
@@ -38,6 +38,14 @@ def _frames(sampled, targets):
 
 def _targets(start, end, count):
     return [round(start+(end-start)*i/(count-1),6) for i in range(count)]
+
+
+def _context_pts(parent_pts, interval, count):
+    """Bounded existing parent PTS outside the dense interval, spread across context."""
+    pts=sorted({t for row in parent_pts for t in row if t<interval[0] or t>interval[1]})
+    if len(pts)<=count:
+        return pts
+    return [pts[round(i*(len(pts)-1)/(count-1))] for i in range(count)]
 
 
 def _actor_at(scan, box, timestamp):
@@ -68,6 +76,9 @@ class UnifiedAnalyzer:
                     'app/perception/stream.py','app/video/sampling.py','app/jobs/unified.py',
                     'app/rules/engine.py','app/evidence/frames.py')},
         }
+        if producers['vlm'].get('backend')=='vllm':
+            backend_path=Path(__file__).with_name('vllm_observer.py')
+            self.manifest['implementation_sha256']['app/inference/vllm_observer.py']=hashlib.sha256(backend_path.read_bytes()).hexdigest()
         self._lock = Lock()
 
     def analyze(self, video_path, job_id, timeout_sec=240., *, deadline=None):
@@ -106,11 +117,14 @@ class UnifiedAnalyzer:
                                 max_long_edge=cfg['review_edge'],deadline=deadline)
         decode_sec = time.monotonic()-decode_started
         windows, review_runs, pending = [],[],[]
+        parents = {}
+        context_frames = {}
         vlm_started = time.monotonic()
         for index, targets in enumerate(target_lists):
             frames = _frames(sampled,targets)
             result = review(self.observer,frames,deadline)
             pts = [f.timestamp_sec for f in frames]
+            context_frames.update({f.timestamp_sec:f for f in frames})
             windows.append(self._window(index,pts,result,'proposal'))
             review_runs.append({'window_id':index,'frame_timestamps_sec':pts,
                                 'attempts':result['attempts'],'status':'complete'})
@@ -125,6 +139,9 @@ class UnifiedAnalyzer:
                 key = (round(start,6),round(end,6))
                 if key not in pending:
                     pending.append(key)
+                    parents[key]=[]
+                if index not in parents[key]:
+                    parents[key].append(index)
         del sampled
         overview_sec = time.monotonic()-vlm_started
         dense_targets = [_targets(a,b,cfg['refine_frames']) for a,b in pending]
@@ -133,14 +150,29 @@ class UnifiedAnalyzer:
         sampled = sample_frames(path,[t for row in dense_targets for t in row],info,
                                 max_long_edge=cfg['review_edge'],deadline=deadline)
         assessments, episodes, refine_runs = [],[],[]
-        for targets in dense_targets:
-            frames = _frames(sampled,targets)
-            result = review(self.observer,frames,deadline)
+        for interval, targets in zip(pending,dense_targets,strict=True):
+            dense_frames = _frames(sampled,targets)
+            dense_pts = [f.timestamp_sec for f in dense_frames]
+            parent_ids = parents[interval]
+            context_pts = _context_pts([review_runs[i]['frame_timestamps_sec'] for i in parent_ids],
+                                      interval,cfg['refine_context_frames'])
+            context_pts = [t for t in context_pts if t not in dense_pts]
+            combined = {f.timestamp_sec:f for f in dense_frames}
+            combined.update({t:context_frames[t] for t in context_pts})
+            frames = [combined[t] for t in sorted(combined)]
+            all_pts = [f.timestamp_sec for f in frames]
+            result = review(self.observer,frames,deadline,
+                            dense_indices=[i for i,t in enumerate(all_pts) if t in dense_pts])
             pts = [f.timestamp_sec for f in frames]
             wid = len(windows)
             window = self._window(wid,pts,result,'refinement')
             windows.append(window)
             refine_runs.append({'window_id':wid,'frame_timestamps_sec':pts,
+                               'scheduled_targets_sec':targets,
+                               'scheduled_frame_timestamps_sec':[sampled[t].timestamp_sec for t in targets],
+                               'dense_frame_timestamps_sec':dense_pts,
+                               'context_frame_timestamps_sec':context_pts,
+                               'parent_window_ids':parent_ids,
                                'attempts':result['attempts'],'status':'complete'})
             self.progress['completed_refinement_calls']=len(refine_runs)
             for index,event in enumerate(result['events']):

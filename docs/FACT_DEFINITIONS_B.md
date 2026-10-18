@@ -108,3 +108,8 @@ B согласен с направлением предложения `worker.as
 Синтетические проверки для реализации A: движение внутри зоны; явное пересечение при видимой незавершённой передаче; исчезновение за перекрытием; неизвестная роль; подтверждённый другой вид операции; обрезанное начало; неоднозначное завершение; повтор ухода после возврата; повторные окна одного ухода; конфликт двух состояний обслуживания. Это план проверок, не отчёт об уже выполненных тестах и не содержание банковского набора.
 
 После локального просмотра добавить положительные и сложные отрицательные примеры, согласовать спорные определения, зафиксировать результаты и только затем отдельно решать вопрос об изменении статуса реестра. Наличие этого документа не разрешает такое изменение автоматически. Пустые пакеты, неизвестные факты и отклонение одного кандидата не обосновывают общий `no_violation`; политика отрицательного решения и адаптер B → C остаются отдельной работой.
+
+
+## Integration extractor v1.4 clarification (2026-10-18)
+
+The transfer-only criterion above was a first-implementation coverage limit, not a regulatory definition of service. The v1.4 extractor also permits positively unfinished initial acceptance counting of the SAME tracked batch, visibly linked to that visitor handover, immediately before departure. Static money, waiting, typing, earlier counting alone, later resumed counting, or later internal recounting are not sufficient. Any sampling gap or occlusion that could hide completion requires null. No general completion criterion, human review, legal rule or release approval is introduced.

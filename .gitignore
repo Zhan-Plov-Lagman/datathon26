@@ -66,3 +66,6 @@ Thumbs.db
 /AUDIT_REPORT.md
 /INTEGRATION_PLAN.md
 /source_requirements/
+
+# Isolated accelerated inference environment
+/.venv-vllm/

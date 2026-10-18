@@ -16,7 +16,7 @@ import time
 from app.api.schema import AnalysisResult
 from app.evidence.frames import extract_evidence_batch
 from app.inference.targeted import FACTS
-from app.inference.unified import PIPELINE_VERSION, UnifiedAnalyzer, fingerprint
+from app.inference.unified import PIPELINE_VERSION, UnifiedAnalyzer, fingerprint, _targets, _context_pts
 from app.inference.worker import WorkerBusy
 from app.jobs.evaluator import registry_digest
 from app.rules.engine import evaluate, load_registry, validate_registry, validate_report
@@ -66,6 +66,9 @@ def validate_bundle(bundle):
         and search.get('manifest_sha256')==fingerprint(report['manifest'])
         and search.get('supported_rule_ids')==list(FACTS))
     cfg = report['manifest']['preprocessing']
+    with_context = report['manifest'].get('pipeline_version')=='cv-targeted.v1.4'
+    if with_context:
+        require(cfg.get('refine_context_frames')==6)
     producers=report['manifest']['producers']
     require(set(producers)=={'vlm','people','objects'})
     require(all(report['model'][k]==producers['vlm'][k] for k in ('id','revision')))
@@ -99,6 +102,25 @@ def validate_bundle(bundle):
             pts=run['frame_timestamps_sec']
             _timeline(pts,duration)
             require(len(interval)==2 and 0<=interval[0]<interval[1]<=duration)
+            if stage=='refinement' and with_context:
+                targets=_targets(*interval,cfg['refine_frames'])
+                require(run.get('scheduled_targets_sec')==targets)
+                scheduled=run.get('scheduled_frame_timestamps_sec')
+                require(isinstance(scheduled,list) and len(scheduled)==len(targets))
+                require(all(type(t) in (int,float) and math.isfinite(t) and 0<=t<=duration
+                            and abs(t-target)<=.5 for t,target in zip(scheduled,targets,strict=True)))
+                require(all(a<=b for a,b in zip(scheduled,scheduled[1:])))
+                dense=run.get('dense_frame_timestamps_sec')
+                require(dense==sorted(set(scheduled)))
+                context=run.get('context_frame_timestamps_sec')
+                parents=run.get('parent_window_ids')
+                require(isinstance(parents,list) and bool(parents) and len(parents)==len(set(parents)))
+                require(all(type(p) is int and p in by_id and by_id[p]['stage']=='proposal' for p in parents))
+                expected_context=_context_pts([by_id[p]['frame_timestamps_sec'] for p in parents],
+                                              interval,cfg['refine_context_frames'])
+                require(context==[t for t in expected_context if t not in dense])
+                require(pts==sorted(set(dense+context)))
+                pts=dense
             require(abs(pts[0]-interval[0])<=.5 and abs(pts[-1]-interval[1])<=.5)
             count=cfg['review_frames'] if stage=='proposal' else cfg['refine_frames']
             require(len(pts)<=count)
@@ -106,6 +128,7 @@ def validate_bundle(bundle):
             require(all(b-a<=max_gap for a,b in zip(pts,pts[1:])))
     require(seen==set(by_id))
     expected_refinements=[]
+    expected_parents={}
     for run in review_runs:
         for observation in by_id[run['window_id']]['observations']:
             anchor=observation['anchor_sec']
@@ -115,7 +138,13 @@ def validate_bundle(bundle):
             pair=[round(max(0.,end-cfg['refine_sec']),6),round(end,6)]
             if pair not in expected_refinements:
                 expected_refinements.append(pair)
+                expected_parents[tuple(pair)]=[]
+            if run['window_id'] not in expected_parents[tuple(pair)]:
+                expected_parents[tuple(pair)].append(run['window_id'])
     require(search['planned_refinement_intervals']==expected_refinements)
+    if with_context:
+        for run,interval in zip(refine_runs,expected_refinements,strict=True):
+            require(run['parent_window_ids']==expected_parents[tuple(interval)])
     packets = bundle['assessments']
     episodes = bundle['diagnostics']['episodes']
     require(isinstance(packets,list) and isinstance(episodes,list) and len(packets)==len(episodes))
@@ -148,6 +177,9 @@ def validate_bundle(bundle):
         require(observation['rule_id']==packet['rule_id'] and observation['anchor_sec']==packet['anchor_sec'])
         require(packet['anchor_sec'] in by_id[wid]['frame_timestamps_sec']
             and observation['start_sec']<=packet['anchor_sec']<=observation['end_sec'])
+        if with_context:
+            run=next(r for r in refine_runs if r['window_id']==wid)
+            require(packet['anchor_sec'] in run['dense_frame_timestamps_sec'])
         episode=episode_map[key]
         require(episode['start_sec']==observation['start_sec'] and episode['end_sec']==observation['end_sec'])
         require(set(episode['fact_sources'])==set(packet['facts']))
@@ -293,13 +325,25 @@ def create_analyzer():
     vlm=os.environ['FORTE_MODEL_DIR']
     people=os.environ.get('FORTE_PEOPLE_MODEL_DIR','models/rtdetr')
     objects=os.environ.get('FORTE_OBJECT_MODEL_DIR','models/owlv2')
-    producers={'vlm':{**model_identity(vlm),'quantization':'nf4'},
+    quantization=os.environ.get('FORTE_MODEL_QUANTIZATION','nf4')
+    backend=os.environ.get('FORTE_VLM_BACKEND','transformers')
+    if backend not in ('transformers','vllm'):
+        raise ValueError('FORTE_VLM_BACKEND must be transformers or vllm')
+    if quantization not in (('nf4','fp16') if backend=='transformers' else ('fp8',)):
+        raise ValueError('Unsupported quantization for selected backend')
+    producers={'vlm':{**model_identity(vlm),'quantization':quantization},
                'people':{**model_identity(people),'adapter':'RTDetr','threshold':.3},
                'objects':{**model_identity(objects),'adapter':'OwlObjects','threshold':.1,
                           'queries':list(OwlObjects.QUERIES)}}
     for producer in producers.values():
         producer['runtime_versions']={name:version(name) for name in ('torch','transformers','bitsandbytes','av')}
-    observer=QwenObserver(vlm,max_new_tokens=1024)
+    producers['vlm']['backend']=backend
+    if backend=='vllm':
+        from app.inference.vllm_observer import VllmObserver
+        producers['vlm']['runtime_versions']['vllm']=version('vllm')
+        observer=VllmObserver(vlm,max_new_tokens=1024)
+    else:
+        observer=QwenObserver(vlm,max_new_tokens=1024,quantize=quantization=='nf4')
     producers['vlm']['max_new_tokens']=observer.max_new_tokens
     return UnifiedAnalyzer(observer,RTDetr(people),OwlObjects(objects),producers=producers)
 

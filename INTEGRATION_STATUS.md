@@ -1,3 +1,13 @@
+## Latest verified stage: v1.4 and backend comparison, 18 October 2026
+
+Two explicitly authorized ultra agents implemented/refined bounded parent context and audited the isolated vLLM adapter. Final combined Windows checks: 55 passed, 1 warning in 43.52 seconds. Strict facts grammar is exercised through the actual targeted review call; incomplete generation remains failure.
+
+Measured v1.3 8B FP16: X-14 33.920 s, X-47 30.297 s, X-20 3.089 s, X-10 3.554 s (model loaded, no API/JPEG). All four returned no final event packets; speed is established, positive detection quality is not. New v1.4 32B FP8/vLLM strict-schema run: X-47 93.958 s, X-14 98.004 s, X-20 4.003 s, X-10 4.558 s; all complete, no format retries, zero fact-supported violations. Cold loading 67.875 s. Three candidate JPEGs decode with exact anchor PTS. All detailed comparisons, failure causes and private backup checksum are in docs/BACKEND_COMPARISON.md.
+
+Use explicit config/runpod-l40s-fast.env or config/runpod-l40s-vllm.env with the matching interpreter. No hidden fallback or fake public acceptance record. Baseline environment and three original projects remain intact. The server has completed these benchmarks; no jury-ready analysis service is claimed. Remaining blocker: representative positive detection, supported class coverage and validated release, not model installation or JSON transport. Do not repeat completed runs without a specific change or diagnostic purpose.
+
+---
+
 # Интеграция в ИТОГ
 
 Статус: **в работе, готовность распознавания не заявляется**. Новый путь CV → адресная Qwen → правила → API реализован и проверяется; актуальные результаты — в последнем разделе. Контракт и запуск — `docs/UNIFIED_PIPELINE.md`, сервер — `docs/RUNPOD_SETUP.md`. Ранние разделы ниже описывают историю, а не текущий набор незавершённых действий.

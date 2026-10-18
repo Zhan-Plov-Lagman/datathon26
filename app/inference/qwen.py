@@ -80,7 +80,8 @@ class QwenObserver:
                 self._format_retries = getattr(self, "_format_retries", 0) + 1
 
     def _observe_once(self, frames: list[SampledFrame], previous_context: str,
-                      deadline: float | None, concise: bool = False) -> dict:
+                      deadline: float | None, concise: bool = False, *,
+                      system_prompt: str | None = None, parser=None) -> dict:
         from transformers import StoppingCriteria, StoppingCriteriaList
 
         check_deadline(deadline)
@@ -88,11 +89,18 @@ class QwenObserver:
             raise ValueError("At least one frame is required")
         content = []
         for index, frame in enumerate(frames):
-            content.extend([{"type": "text", "text": f"Frame {index}, time {frame.timestamp_sec:.6f} seconds:"},
+            label = (f"Image index {index}:" if system_prompt is not None else
+                     f"Frame {index}, time {frame.timestamp_sec:.6f} seconds:")
+            content.extend([{"type": "text", "text": label},
                             {"type": "image"}])
+        if system_prompt is not None:
+            content.append({"type": "text", "text":
+                            f"Exactly {len(frames)} images. Allowed frame indices: "
+                            + ", ".join(str(i) for i in range(len(frames)))
+                            + ". Indices are image positions, NEVER seconds. Use only these indices."})
         content.append({"type": "text", "text": "Describe this sequence. Prior tentative context (not new evidence): "
                         + previous_context[:600]})
-        system = SYSTEM_PROMPT
+        system = system_prompt or SYSTEM_PROMPT
         if getattr(self, "language", "en") == "ru":
             system = system.replace("short English descriptions", "short Russian descriptions")
             system += "\nWrite all string VALUES in Russian; keep JSON KEY names unchanged."
@@ -120,7 +128,7 @@ class QwenObserver:
             raw = self.processor.batch_decode(generated, skip_special_tokens=True,
                                                clean_up_tokenization_spaces=False)[0]
             try:
-                return parse_observations(raw, [frame.timestamp_sec for frame in frames])
+                return (parser or parse_observations)(raw, [frame.timestamp_sec for frame in frames])
             except ModelOutputError as exc:
                 exc.generated_tokens = int(generated.shape[-1])
                 exc.hit_token_limit = exc.generated_tokens >= self.max_new_tokens

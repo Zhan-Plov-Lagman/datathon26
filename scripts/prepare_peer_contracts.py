@@ -23,6 +23,10 @@ def main():
     output.mkdir(parents=True, exist_ok=False)
     files = {"B": ["app/rules/__init__.py", "app/rules/engine.py", "config/rules.yaml"],
              "C": ["app/api/__init__.py", "app/api/schema.py", "app/jobs/__init__.py", "app/jobs/pipeline.py"]}
+    for role, relative in (("B", "app/rules/policy.py"), ("C", "app/jobs/detection.py")):
+        present = read("ls-tree", "--name-only", versions[role], "--", relative).decode().strip()
+        if present:
+            files[role].append(relative)
     for role, paths in files.items():
         for relative in paths:
             destination = output / relative

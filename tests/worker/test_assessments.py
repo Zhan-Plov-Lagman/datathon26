@@ -108,14 +108,16 @@ class AssessmentTests(unittest.TestCase):
     def test_deadline_retry_pts_and_context(self):
         observer = Mock()
         parsed = parse_candidates(json.dumps(response()), [0, 1, 2])
-        observer._observe_once.side_effect = [ModelOutputError("invalid_json"), parsed]
+        features = {"same_person": None, "cash_from_customer": None, "cash_handling": None,
+                    "visible_crossing": None, "feet": [None]*3, "handover_active": [None]*3}
+        observer._observe_once.side_effect = [ModelOutputError("invalid_json"), parsed, features]
         deadline = time.monotonic() + 20
         with patch("app.inference.assessments.probe_video", return_value=VideoInfo(3, 0, 64, 64, 0)), \
              patch("app.inference.assessments.sample_frames", return_value={i: SampledFrame(i, None) for i in range(3)}):
             bundle = extract_assessments(observer, "synthetic.mov", report(), deadline=deadline)
         self.assertEqual(len(bundle["assessments"]), 1)
         self.assertEqual(observer._observe_once.call_args.args[2], deadline)
-        self.assertEqual(observer._observe_once.call_count, 2)
+        self.assertEqual(observer._observe_once.call_count, 3)
         self.assertEqual(bundle["metrics"]["format_retries"], 1)
         with patch("app.inference.assessments.probe_video", return_value=VideoInfo(3, 0, 64, 64, 0)), \
              patch("app.inference.assessments.sample_frames", return_value={i: SampledFrame(i+0.01, None) for i in range(3)}):

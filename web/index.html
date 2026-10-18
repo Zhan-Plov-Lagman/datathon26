@@ -4,24 +4,44 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
-  <title>Forte · Проверка видео</title>
-  <link rel="stylesheet" href="/assets/style.css">
-  <script src="/assets/app.js" defer></script>
+  <meta name="theme-color" content="#4a0221">
+  <meta name="description" content="Проверка кассовых операций по видео: события, таймкоды и исходные кадры в одном интерфейсе. Проект Datathon 26 для кейса ForteBank.">
+  <title>Forte · Видео под контролем</title>
+  <link rel="stylesheet" href="/assets/style.css?v=forte-4">
+  <script src="/assets/intro.js?v=forte-3" defer></script>
+  <script src="/assets/app.js?v=forte-2" defer></script>
 </head>
 <body>
-  <header class="topbar"><a class="brand" href="/" aria-label="На главную">forte<span class="brand-dot">.</span><span class="brand-label">VIDEO REVIEW</span></a><span class="privacy">Обработка в локальном контуре</span></header>
+  <dialog id="brand-intro" class="brand-intro" aria-label="Вступительная анимация Forte" aria-describedby="intro-caption">
+    <div class="intro-video-wrap" id="intro-video-wrap"></div>
+    <div class="intro-topline"><span>FORTE / VIDEO REVIEW</span><button id="skip-intro" type="button" autofocus>Пропустить <span aria-hidden="true">↗</span></button></div>
+    <div class="intro-bottomline"><p id="intro-caption">Всё важное. В поле зрения.</p><span>FORTEBANK × DATATHON 26</span></div>
+  </dialog>
+  <a class="skip-link" href="#workspace">Перейти к проверке видео</a>
+  <header class="topbar"><a class="brand" href="/" aria-label="На главную"><span class="brand-word">forte<span class="brand-dot">.</span></span><span class="brand-label">VIDEO REVIEW</span></a><nav aria-label="Навигация"><a href="#how-it-works">Как это работает</a><a class="nav-action" href="#workspace">Проверить видео <span aria-hidden="true">↗</span></a></nav></header>
   <main>
-    <div class="intro"><p class="eyebrow">ПРОВЕРКА КАССОВЫХ ОПЕРАЦИЙ</p><h1>От видео к проверяемому событию.</h1><p>Загрузите запись, дождитесь анализа и проверьте события по времени, исходным кадрам и нормативному основанию.</p></div>
-    <div class="workspace">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="intro"><p class="eyebrow"><span></span> FORTEBANK × DATATHON 26</p><h1 id="hero-title">Всё важное.<br>В поле <em>зрения.</em></h1><p class="hero-description">Проверка кассовых операций с AI.<br>От видеозаписи — к событиям, кадрам<br class="desktop-break"> и основаниям для вашего решения.</p><a class="hero-action" href="#workspace">Перейти к проверке <span aria-hidden="true">↗</span></a><p class="hero-note"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v6c0 5 8 9 8 9s8-4 8-9V6Z"/><path d="m8 12 3 3 5-6"/></svg>Обработка в локальном контуре</p></div>
+      <div class="hero-art" aria-hidden="true">
+        <div class="art-orbit orbit-one"></div><div class="art-orbit orbit-two"></div>
+        <div class="art-label"><span class="tiny-cross">+</span> ВНИМАНИЕ К ДЕТАЛЯМ</div>
+        <div class="viewfinder"><div class="finder-top"><span>FORTE / VIDEO REVIEW</span><span class="finder-dot"></span></div><div class="focus-shape"><i></i><i></i><i></i><i></i><svg viewBox="0 0 100 100"><path d="M36 25 72 50 36 75Z"/></svg></div><div class="scan-line"></div><div class="finder-bottom"><span>КАЖДЫЙ КАДР ИМЕЕТ ЗНАЧЕНИЕ</span><span>↗</span></div></div>
+        <div class="art-caption"><span class="caption-icon">⌖</span><div><strong>Точность в деталях</strong><span>Время · Кадр · Основание</span></div><span class="caption-arrow">↗</span></div>
+        <span class="art-index">01 — 03 / ОТ ЗАПИСИ К РЕШЕНИЮ</span>
+      </div>
+    </section>
+    <section id="how-it-works" class="workflow" aria-label="Как это работает"><div><span class="workflow-number">01</span><p><strong>Загрузите запись</strong><span>Исходное видео в формате MOV</span></p></div><div><span class="workflow-number">02</span><p><strong>Дождитесь анализа</strong><span>Поиск визуальных признаков событий</span></p></div><div><span class="workflow-number">03</span><p><strong>Проверьте результат</strong><span>Таймкоды, кадры и основания</span></p></div></section>
+    <div class="workspace-heading"><div><p class="eyebrow">РАБОЧЕЕ ПРОСТРАНСТВО</p><h2>От записи — к деталям.</h2></div><span class="workspace-caption">Ваше решение начинается с фактов.</span></div>
+    <div class="workspace" id="workspace" tabindex="-1">
       <section class="panel upload-panel" aria-labelledby="upload-title">
         <div class="section-heading"><span class="step">01</span><h2 id="upload-title">Загрузка записи</h2></div>
         <form id="upload-form">
           <label for="api-key">Ключ доступа</label>
           <input id="api-key" type="password" autocomplete="off" placeholder="Введите ключ API" required spellcheck="false">
-          <p class="hint">Ключ используется только на этой странице и не сохраняется в браузере.</p>
+          <p class="hint">Введите значение FORTE_API_KEY из локального .env — без имени переменной и кавычек. Ключ не сохраняется в браузере.</p>
           <div id="readiness" class="readiness" role="status">Введите ключ, чтобы проверить готовность анализа.</div>
           <button type="button" id="check-ready" class="text-button">Проверить подключение</button>
-          <label id="drop-zone" class="drop-zone" for="video-file"><span class="upload-symbol" aria-hidden="true">↑</span><strong id="file-name">Выберите или перетащите видео</strong><span id="file-meta">Формат MOV</span><input id="video-file" type="file" accept=".mov,video/quicktime" required></label>
+          <label id="drop-zone" class="drop-zone" for="video-file"><span class="upload-symbol" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 16V3m-5 5 5-5 5 5M4 15v5h16v-5"/></svg></span><strong id="file-name">Выберите или перетащите видео</strong><span id="file-meta">Формат MOV</span><span class="file-choice" aria-hidden="true">Выбрать файл <span>↗</span></span><input id="video-file" type="file" accept=".mov,video/quicktime" required aria-label="Выбрать видео MOV"></label>
           <button id="submit" class="primary" type="submit">Начать анализ <span aria-hidden="true">→</span></button>
           <p id="upload-message" class="message" role="status" aria-live="polite"></p>
         </form>
@@ -29,14 +49,14 @@
       </section>
       <section class="panel result-panel" aria-labelledby="result-title">
         <div class="section-heading"><span class="step">02</span><h2 id="result-title">Результат анализа</h2><span id="status-badge" class="badge">Ожидание</span></div>
-        <div id="empty-state" class="empty-state"><div class="empty-icon" aria-hidden="true">▷</div><h3>Здесь появится результат</h3><p>Для каждого подтверждённого события — время, объяснение и кадры из исходной записи.</p></div>
+        <div id="empty-state" class="empty-state"><div class="empty-visual" aria-hidden="true"><div class="empty-back"></div><div class="empty-icon"><svg viewBox="0 0 48 48"><rect x="6" y="9" width="36" height="30" rx="6"/><path d="m20 17 11 7-11 7Z"/></svg></div><span class="empty-spark">+</span></div><p class="empty-kicker">МЕСТО ДЛЯ ВАЖНЫХ ДЕТАЛЕЙ</p><h3>Ваша запись расскажет больше.</h3><p>После анализа здесь появятся события,<br>таймкоды и кадры из исходной записи.</p><div class="result-tags"><span>Таймкод</span><span>Исходный кадр</span><span>Основание</span></div></div>
         <div id="job-info" hidden><p id="job-label" class="job-label"></p><p id="status-text" role="status" aria-live="polite"></p></div>
         <div id="video-section" hidden><video id="player" controls preload="metadata" muted playsinline></video><p class="hint">Видео воспроизводится из выбранного локального файла. Кнопки времени переводят к событию.</p></div>
         <p id="playback-note" class="hint" hidden>После обновления страницы выберите исходный MOV, чтобы перейти к событию в видео. Повторная загрузка для этого не нужна.</p>
         <div id="events" aria-live="polite"></div>
       </section>
     </div>
-    <footer>ForteBank · Datathon 26 <span>Окончательную оценку события выполняет проверяющий.</span></footer>
+    <footer><div><span class="footer-brand">forte.</span><span>Проект для кейса ForteBank · Datathon 26</span></div><span>AI помогает заметить.<br>Окончательное решение — за человеком.</span><button id="replay-intro" type="button" class="text-button" hidden>Повторить интро ↗</button><a href="#hero-title">Наверх ↑</a></footer>
   </main>
 </body>
 </html>

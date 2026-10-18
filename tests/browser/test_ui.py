@@ -65,6 +65,9 @@ def test_browser_upload_result_seek_resume_and_mobile(settings, result, syntheti
             page.on("request", lambda request: external.append(request.url) if not request.url.startswith((url, "blob:", "data:")) else None)
             try:
                 page.goto(url)
+                if page.locator("#brand-intro").is_visible():
+                    page.locator("#skip-intro").click()
+                    expect(page.locator("#brand-intro")).not_to_be_visible()
                 page.locator("#api-key").fill("wrong")
                 page.locator("#check-ready").click()
                 expect(page.locator("#readiness")).to_contain_text("Ключ доступа не принят")
@@ -100,6 +103,9 @@ def test_browser_upload_result_seek_resume_and_mobile(settings, result, syntheti
                     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
                     page.screenshot(path=str(snapshots / "mobile.png"), full_page=True)
                     page.reload()
+                    expect(page.locator("#brand-intro")).to_be_visible()
+                    page.locator("#skip-intro").click()
+                    expect(page.locator("#brand-intro")).not_to_be_visible()
                     expect(page.locator("#api-key")).to_have_value("")
                     expect(page.locator("#job-id")).to_have_value(job_id)
                     page.locator("#api-key").fill(settings.api_key)

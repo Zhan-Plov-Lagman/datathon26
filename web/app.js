@@ -90,7 +90,7 @@ function timeButton(seconds) {
     if (!selectedFile) { $("playback-note").hidden = false; return; }
     if (Number.isFinite(video.duration)) {
       video.currentTime = Math.min(seconds, video.duration);
-      video.scrollIntoView({behavior: "smooth", block: "center"});
+      video.scrollIntoView({behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center"});
     } else {
       $("playback-note").textContent = "Браузер не смог открыть этот MOV. Исходные кадры доступны ниже; для воспроизведения используйте локальный видеоплеер.";
       $("playback-note").hidden = false;

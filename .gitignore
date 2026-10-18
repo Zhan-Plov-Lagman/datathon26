@@ -11,6 +11,8 @@
 *.mov
 *.MOV
 *.mp4
+# Public brand animation supplied for the UI; other recordings stay ignored.
+!/web/media/forte-intro.mp4
 *.avi
 *.mkv
 *.xlsx

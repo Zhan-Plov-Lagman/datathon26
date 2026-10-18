@@ -114,7 +114,7 @@ class AssessmentTests(unittest.TestCase):
         deadline = time.monotonic() + 20
         with patch("app.inference.assessments.probe_video", return_value=VideoInfo(3, 0, 64, 64, 0)), \
              patch("app.inference.assessments.sample_frames", return_value={i: SampledFrame(i, None) for i in range(3)}):
-            bundle = extract_assessments(observer, "synthetic.mov", report(), deadline=deadline)
+            bundle = extract_assessments(observer, "synthetic.mov", report(), deadline=deadline, refine_candidates=False)
         self.assertEqual(len(bundle["assessments"]), 1)
         self.assertEqual(observer._observe_once.call_args.args[2], deadline)
         self.assertEqual(observer._observe_once.call_count, 3)

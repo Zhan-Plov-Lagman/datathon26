@@ -1,0 +1,2 @@
+/scripts/*.sh text eol=lf
+/config/runpod-l40s.env text eol=lf

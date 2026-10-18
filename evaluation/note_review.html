@@ -1,0 +1,37 @@
+<!doctype html><html lang="ru"><meta charset="utf-8">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; media-src file: blob:; connect-src 'none'">
+<title>Два примера для проверки</title>
+<style>body{font:17px system-ui;max-width:1100px;margin:30px auto;padding:0 20px;background:#f5f6f8;color:#182030}section{background:white;padding:24px;margin:20px 0;border-radius:12px}video{max-height:480px;max-width:100%;background:#111}pre{white-space:pre-wrap;font:15px system-ui}label{display:block;margin:12px 0}input,select,button,textarea{font:inherit;padding:8px}button{cursor:pointer}small{display:block;color:#536075}h2{margin-top:0}</style>
+<h1>Проверь два примера</h1>
+<p>Открой видео и сравни с заметкой. Эти ролики выбраны автоматически по словам в заметках. Правильные ответы ещё не установлены. Ничего не отправляется в интернет.</p>
+<p><b>Вопрос:</b> сотрудник вышел за границу своего рабочего места, пока передача наличных ещё явно продолжалась? Просто встать со стула, потянуться или уйти клиенту — другое действие. Если граница места или состояние передачи непонятны, выбери «Неясно».</p>
+<label>Кто проверил: <input id="reviewer" placeholder="Твоё имя"></label><main id="cases"></main>
+<button id="save">Сохранить мои ответы</button><p id="message" role="status"></p>
+<script>
+const data=__LOCAL_DATA__;
+const root=document.querySelector('#cases');
+for(const [i,c] of data.cases.entries()){
+ const s=document.createElement('section');
+ s.innerHTML=`<h2>Пример ${i+1}</h2><p class="filename"></p><video controls preload="metadata"></video><p>Если видео не открывается здесь, открой исходник в обычном плеере:</p><small class="path"></small><details><summary>Заметка B — проверь по видео</summary><pre></pre></details><label>Ответ: <select class="answer"><option value="unknown">Неясно / ещё не проверил</option value="yes">Да, такой уход виден</option value="no">Нет, такого ухода нет</option value="uncertain">Просмотрел, но определить нельзя</option></select></label><label>Если «Да», время ухода в секундах: <input class="time" type="number" min="0" step="0.01"></label><label>Почему неясно / комментарий:<br><textarea class="reason" rows="3" style="width:95%" placeholder="Например: не видно границу рабочего места или непонятно, закончилась ли передача"></textarea></label><label><input class="watched" type="checkbox"> Я просмотрел этот ролик целиком и проверил ответ</label>`;
+ s.querySelector('.filename').textContent=c.id;
+ s.querySelector('.path').textContent=c.video_path;
+ s.querySelector('video').src=c.video_url;
+ s.querySelector('pre').textContent=c.notes;
+ s.querySelector('.answer').onchange=e=>{c.label=e.target.value==='yes'?true:e.target.value==='no'?false:null;};
+ s.querySelector('.reason').oninput=e=>{c.review_reason=e.target.value;};
+ s.querySelector('.watched').onchange=e=>{c.reviewed=e.target.checked;};
+ s.querySelector('.time').oninput=e=>{const value=e.target.value; c.events=value===''?[]:[{type:'cashier_leaves_service',timecode_sec:Number(value)}];};
+ root.append(s);
+}
+document.querySelector('#save').onclick=()=>{
+ const reviewer=document.querySelector('#reviewer').value.trim();
+ if(!reviewer){document.querySelector('#message').textContent='Впиши имя проверившего.';return;}
+ for(const c of data.cases){c.reviewer=reviewer;c.reviewed_at=new Date().toISOString();if(c.label!==true)c.events=[];}
+ if(data.cases.some(c=>c.label===true&&(!c.events.length||!Number.isFinite(c.events[0].timecode_sec)||c.events[0].timecode_sec<0))){document.querySelector('#message').textContent='Для ответа «Да» укажи время ухода.';return;}
+ if(data.cases.some(c=>c.reviewed&&c.label===null&&!(c.review_reason||'').trim())){document.querySelector('#message').textContent='Для просмотренного примера с ответом «Неясно» напиши причину в поле комментария.';return;}
+ const url=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:'application/json'}));
+ const a=document.createElement('a');a.href=url;a.download='reviewed-cases.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),5000);
+ document.querySelector('#message').textContent='Ответы сохранены. Неясные ответы останутся неизвестными; они не считаются отрицательными.';
+};
+</script></html>

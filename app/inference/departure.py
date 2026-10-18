@@ -8,7 +8,7 @@ import math
 
 from app.inference.schema import ModelOutputError
 
-VERSION = "departure-visual.v0.2"
+VERSION = "departure-visual.v0.4"
 PROMPT = '''Inspect these ordered silent images. Track the SAME person who appears to
 handle a cash transaction, without identifying their face or guessing sex.
 Return ONLY compact JSON:
@@ -47,18 +47,38 @@ def parse_features(raw, times):
         for key in ("same_person", "cash_from_customer", "cash_handling", "visible_crossing"):
             if data[key] is not None and type(data[key]) is not bool:
                 raise ValueError()
+        normalizations = []
         for key in ("feet", "handover_active"):
-            if not isinstance(data[key], list) or len(data[key]) != len(times):
+            if not isinstance(data[key], list):
                 raise ValueError()
+            if len(data[key]) != len(times):
+                # All-null carries no frame-specific evidence. Never truncate
+                # or shift any known value to repair an index/count error.
+                if any(value is not None for value in data[key]):
+                    raise ValueError()
+                normalizations.append(key + "_all_unknown_length")
+                data[key] = [None] * len(times)
         if any(v is not None and type(v) is not bool for v in data["handover_active"]):
             raise ValueError()
         for point in data["feet"]:
             if point is not None and (not isinstance(point, list) or len(point) != 2 or
                 any(type(v) not in (int, float) or not math.isfinite(v) or not 0 <= v <= 1 for v in point)):
                 raise ValueError()
+        if normalizations:
+            data["_normalizations"] = normalizations
         return data
     except (KeyError, TypeError, ValueError):
-        raise ModelOutputError("invalid_schema") from None
+        exc = ModelOutputError("invalid_schema")
+        exc.schema_stage = "visual_features"
+        exc.schema_diagnostic = {"expected_frames": len(times), "object_type": type(data).__name__}
+        if isinstance(data, dict):
+            for key in ("same_person", "cash_from_customer", "cash_handling", "visible_crossing", "feet", "handover_active"):
+                value = data.get(key)
+                exc.schema_diagnostic[key + "_type"] = type(value).__name__
+                if isinstance(value, list):
+                    exc.schema_diagnostic[key + "_count"] = len(value)
+            exc.schema_diagnostic["field_count"] = len(data)
+        raise exc from None
 
 
 def validate_context(context, report):

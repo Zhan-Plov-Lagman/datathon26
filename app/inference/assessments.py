@@ -13,7 +13,7 @@ import time
 from app.inference.schema import ModelOutputError, parse_observations
 from app.inference.departure import (VERSION, PROMPT as FEATURE_PROMPT, parse_features,
                                     validate_context, ground_facts)
-from app.video.sampling import check_deadline, probe_video, sample_frames
+from app.video.sampling import check_deadline, plan_windows, probe_video, sample_frames
 
 FACTS = ("bank_cash_acceptance", "actor_is_cashier", "cashier_left_workplace",
          "service_in_progress", "service_completed")
@@ -73,7 +73,7 @@ def parse_candidates(raw: str, times: list[float]) -> dict:
     try:
         source = json.loads(text)
         episodes = source["episodes"]
-        if not isinstance(episodes, list) or len(episodes) > 1:
+        if not isinstance(episodes, list) or len(episodes) > max(0, len(times)-1):
             raise ValueError()
         parsed = []
         for episode in episodes:
@@ -110,6 +110,10 @@ def parse_candidates(raw: str, times: list[float]) -> dict:
     except (KeyError, ValueError, TypeError, IndexError):
         exc = ModelOutputError("invalid_schema")
         exc.schema_stage = stage
+        if isinstance(source, dict):
+            value = source.get("episodes")
+            exc.schema_diagnostic = {"episodes_type": type(value).__name__,
+                                     "episodes_count": len(value) if isinstance(value, list) else None}
         raise exc from None
 
 
@@ -148,9 +152,18 @@ def build_bundle(report, results, *, local_context=None, executed=None):
     # Existing observation IDs remain valid; append fresh visual observations.
     next_id = max(w["window_id"] for w in output["windows"]) + 1
     proposed = []
+    expanded, members = [], {}
     for source, result in zip(report["windows"], results, strict=True):
+        children = result.get("refinement_results", [])
+        expanded.append((source, result, not children))
+        expanded.extend((source, child, True) for child in children)
+        members[source["window_id"]] = []
+    for source, result, use_proposals in expanded:
+        original_id = source["window_id"]
+        source = result.get("refined_window", source)
         wid = next_id
         next_id += 1
+        members[original_id].append(wid)
         fresh = {k: copy.deepcopy(source[k]) for k in
                  ("window_start_sec", "window_end_sec", "frame_timestamps")}
         fresh.update({"window_id": wid, **{k: result[k] for k in
@@ -160,7 +173,7 @@ def build_bundle(report, results, *, local_context=None, executed=None):
         features = result.get("features")
         if features is not None:
             for key, value in features.items():
-                if value is None:
+                if value is None or key.startswith("_"):
                     continue
                 feature_refs.append({"window_id": wid, "observation_index": len(fresh["observations"])})
                 fresh["observations"].append({
@@ -169,7 +182,8 @@ def build_bundle(report, results, *, local_context=None, executed=None):
                     "description": f"Local visual feature {key}: {json.dumps(value)}; unvalidated model observation.",
                     "feature_key": key})
         output["windows"].append(fresh)
-        for episode in result["episodes"]:
+        for episode in result["episodes"] if use_proposals else []:
+            episode = {**episode, "refinement_complete": result.get("refinement_complete", False)}
             proposed.append((wid, episode, fresh, features, feature_refs))
     for index, (wid, episode, window, features, feature_refs) in enumerate(proposed):
         # Overlap is NOT proof of identity. Withhold ambiguous proposals instead
@@ -180,7 +194,7 @@ def build_bundle(report, results, *, local_context=None, executed=None):
         refs = [{"window_id": wid, "observation_index": i} for i in episode["observation_indices"]] + feature_refs
         conflict = (episode["claims"]["service_in_progress"] is True
                     and episode["claims"]["service_completed"] is True)
-        identifier = f"{report.get('job_id', 'local')}:proposal:{wid}"
+        identifier = f"{report.get('job_id', 'local')}:proposal:{wid}:{index}"
         facts = dict.fromkeys(FACTS)
         fact_sources = {key: {"origin": "unknown", "observation_refs": [],
                              "reason": "feature_stage_not_executed"} for key in FACTS}
@@ -204,9 +218,9 @@ def build_bundle(report, results, *, local_context=None, executed=None):
         packets.append({"rule_id": "cashier_leaves_service", "event_id": identifier,
                         "anchor_sec": episode["anchor_sec"], "observation_refs": refs,
                         # Draft predicates do not imply completed refinement.
-                        "facts": facts, "refinement_complete": False,
+                        "facts": facts, "refinement_complete": episode["refinement_complete"],
                         "full_sequence_visible": False})
-    limitations = ["model_quality_unvalidated", "sampled_visibility_only", "refinement_not_implemented",
+    limitations = ["model_quality_unvalidated", "sampled_visibility_only", "bounded_refinement_4sec",
                             "cross_window_identity_unresolved", "search_coverage_unvalidated"]
     if local_context is None:
         limitations.append("local_context_missing")
@@ -214,17 +228,23 @@ def build_bundle(report, results, *, local_context=None, executed=None):
     trace = []
     if executed is not None:
         expected = [w["window_id"] for w in report["windows"]]
-        if executed != expected or any("features" not in result for result in results):
+        if executed != expected or any(result.get("candidate_stage_complete") is not True for result in results):
             raise ValueError("Incomplete detector execution trace")
-        offset = max(expected)+1
         for i, original_id in enumerate(executed):
-            trace.append({"source_window_id": original_id, "output_window_id": offset+i,
-                          "completed_stages": ["visual_candidate", "visual_features", "predicate_evaluation"],
-                          "same_source_pts": True})
+            refined = results[i].get("refinement_results", [])
+            if any(child.get("refinement_complete") is not True or "features" not in child for child in refined):
+                raise ValueError("Incomplete refinement execution trace")
+            trace.append({"source_window_id": original_id, "output_window_id": members[original_id][0],
+                          "refinement_window_ids": members[original_id][1:],
+                          "completed_stages": ["visual_candidate"] +
+                          (["visual_features"] if "features" in results[i] else []) +
+                          (["dense_candidate", "dense_features"] if refined else []) + ["predicate_evaluation"],
+                          "same_source_pts": True,
+                          "refinements": [child["refinement"] for child in refined]})
         runs = [{"rule_id": "cashier_leaves_service", "detector_version": VERSION,
                  "status": "complete", "processed_window_ids":
-                 [item for record in trace for item in (record["source_window_id"], record["output_window_id"])],
-                 "refinement_status": "not_needed"}]
+                 [item for record in trace for item in [record["source_window_id"], record["output_window_id"], *record["refinement_window_ids"]]],
+                 "refinement_status": "completed" if any(r.get("refinement_results") for r in results) else "not_needed"}]
     return {"schema_version": "assessment_bundle.v1", "complete": True,
             "report": output, "assessments": packets,
             "diagnostics": {"episodes": diagnostics, "search": {
@@ -237,7 +257,7 @@ def build_bundle(report, results, *, local_context=None, executed=None):
 
 
 def extract_assessments(observer, video_path, report, timeout_sec=120, *, deadline=None,
-                        local_context=None):
+                        local_context=None, refine_candidates=True):
     validate_report(report)
     local_context = validate_context(local_context, report)
     if not math.isfinite(timeout_sec) or timeout_sec <= 0:
@@ -256,8 +276,8 @@ def extract_assessments(observer, video_path, report, timeout_sec=120, *, deadli
     results = []
     executed = []
     format_retries = 0
-    for window in report["windows"]:
-        frames = [selected[t] for t in window["frame_timestamps"]]
+    def observe_pair(frames, *, with_features=True):
+        nonlocal format_retries
         for attempt in range(2):
             check_deadline(deadline)
             try:
@@ -266,9 +286,12 @@ def extract_assessments(observer, video_path, report, timeout_sec=120, *, deadli
                 check_deadline(deadline)
                 break
             except ModelOutputError as exc:
-                if attempt or exc.reason != "invalid_json":
+                if attempt or exc.reason not in ("invalid_json", "invalid_schema"):
                     raise
                 format_retries += 1
+        result["candidate_stage_complete"] = True
+        if not with_features:
+            return result
         for attempt in range(2):
             check_deadline(deadline)
             try:
@@ -278,15 +301,47 @@ def extract_assessments(observer, video_path, report, timeout_sec=120, *, deadli
                 result["features"] = features
                 break
             except ModelOutputError as exc:
-                if attempt or exc.reason != "invalid_json":
+                if attempt or exc.reason not in ("invalid_json", "invalid_schema"):
                     raise
                 format_retries += 1
+        return result
+
+    for window in report["windows"]:
+        frames = [selected[t] for t in window["frame_timestamps"]]
+        result = observe_pair(frames, with_features=not refine_candidates)
+        refinements = {}
+        for episode in result["episodes"] if refine_candidates else []:
+            # Bounded review, not evidence of continuous visibility or identity.
+            anchor = episode["anchor_sec"]
+            start, end = max(0, anchor-2), min(info.duration_sec, anchor+2)
+            if (start, end) in refinements:
+                continue
+            targets = list(plan_windows(info.duration_sec, window_sec=4, overlap_sec=0,
+                                       frames_per_window=6, start_sec=start, end_sec=end)[0].targets)
+            dense = sample_frames(video_path, targets, info, 560, deadline)
+            unique = {dense[t].timestamp_sec: dense[t] for t in targets}
+            frames = [unique[t] for t in sorted(unique)]
+            if len(frames) < 2:
+                raise ValueError("Insufficient distinct refinement frames")
+            refined = observe_pair(frames)
+            refined["refined_window"] = {"window_start_sec": start, "window_end_sec": end,
+                                         "frame_timestamps": [f.timestamp_sec for f in frames]}
+            refined["refinement_complete"] = True
+            refined["refinement"] = {"requested_anchor_sec": anchor, "start_sec": start, "end_sec": end,
+                                     "frame_timestamps": [f.timestamp_sec for f in frames],
+                                     "remaining_proposals": len(refined["episodes"])}
+            refinements[(start,end)] = refined
+        if refinements:
+            result["refinement_results"] = list(refinements.values())
         results.append(result)
         executed.append(window["window_id"])
         check_deadline(deadline)
     bundle = build_bundle(report, results, local_context=local_context, executed=executed)
     bundle["metrics"] = {"total_sec": round(time.monotonic() - started, 3),
                          "windows": len(results), "proposals": len(bundle["diagnostics"]["episodes"]),
+                         "refined_windows": sum(len(r.get("refinement_results", [])) for r in results),
+                         "unknown_array_repairs": sum(len(r.get("features", {}).get("_normalizations", []))
+                             for result in results for r in [result, *result.get("refinement_results", [])]),
                          "format_retries": format_retries}
     check_deadline(deadline)
     return bundle

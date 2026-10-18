@@ -104,7 +104,12 @@ class QwenObserver:
         if getattr(self, "language", "en") == "ru":
             system = system.replace("short English descriptions", "short Russian descriptions")
             system += "\nWrite all string VALUES in Russian; keep JSON KEY names unchanged."
-        if concise:
+        if concise and system_prompt is not None:
+            system += ("\nYour previous response failed structural validation. Return the requested JSON schema only. "
+                       f"There are exactly {len(frames)} images; every frame index must be between 0 and {len(frames)-1}. "
+                       "Per-image arrays must have exactly that many entries. Keep all descriptions very short. "
+                       "Do not add fields from another schema. Never invent observations to fill arrays.")
+        elif concise:
             system += ("\nSTRICT SHORT JSON: use at most TWO observations, each description at most 20 words. "
                        "operation_context at most 15 words; at most TWO visibility_limits, each at most 12 words. "
                        "Close all arrays and the JSON object. No prose before or after JSON.")

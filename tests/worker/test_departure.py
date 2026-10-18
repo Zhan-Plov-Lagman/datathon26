@@ -38,6 +38,14 @@ class DepartureTests(unittest.TestCase):
             data=features();change(data)
             with self.assertRaises(ModelOutputError):parse_features(json.dumps(data),[0,1,2])
 
+    def test_only_all_unknown_arrays_can_be_resized_without_fabrication(self):
+        data=features();data['feet']=[None]*4
+        parsed=parse_features(json.dumps(data),[0,1,2])
+        self.assertEqual(parsed['feet'],[None]*3)
+        self.assertEqual(parsed['_normalizations'],['feet_all_unknown_length'])
+        data['feet']=[None,None,None,[.2,.3]]
+        with self.assertRaises(ModelOutputError):parse_features(json.dumps(data),[0,1,2])
+
     def test_crossing_and_unfinished_handover_generate_grounded_bools(self):
         c=validate_context(context(),report())
         episode=parse_candidates(json.dumps(response()),[0,1,2])["episodes"][0]
@@ -75,15 +83,26 @@ class DepartureTests(unittest.TestCase):
         observer=Mock();observer._observe_once.side_effect=[parsed,features()]
         with patch("app.inference.assessments.probe_video",return_value=VideoInfo(3,0,64,64,0)), \
              patch("app.inference.assessments.sample_frames",return_value={i:SampledFrame(i,None) for i in range(3)}):
-            bundle=extract_assessments(observer,"synthetic.mov",report())
+            bundle=extract_assessments(observer,"synthetic.mov",report(), refine_candidates=False)
             run=bundle["diagnostics"]["search"]["detector_runs"][0]
             self.assertEqual(run["processed_window_ids"],[0,1])
             self.assertEqual(run["refinement_status"],"not_needed")
             self.assertEqual(bundle["assessments"],[])
-            observer._observe_once.side_effect=[parsed,ModelOutputError("invalid_schema")]
-            with self.assertRaises(ModelOutputError):extract_assessments(observer,"synthetic.mov",report())
+            observer._observe_once.side_effect=[parsed,ModelOutputError("invalid_schema"),ModelOutputError("invalid_schema")]
+            with self.assertRaises(ModelOutputError):extract_assessments(observer,"synthetic.mov",report(), refine_candidates=False)
         self.assertEqual(build_bundle(report(),[parsed])["diagnostics"]["search"]["detector_runs"],[])
         with self.assertRaises(ValueError):build_bundle(report(),[parsed],executed=[])
+
+    def test_schema_retry_regenerates_once_without_changing_deadline_or_values(self):
+        parsed=parse_candidates(json.dumps(response()),[0,1,2]);parsed['episodes']=[]
+        observer=Mock();observer._observe_once.side_effect=[ModelOutputError('invalid_schema'),parsed,features()]
+        with patch('app.inference.assessments.probe_video',return_value=VideoInfo(3,0,64,64,0)), \
+             patch('app.inference.assessments.sample_frames',return_value={i:SampledFrame(i,None) for i in range(3)}):
+            bundle=extract_assessments(observer,'synthetic.mov',report(), refine_candidates=False)
+        self.assertEqual(bundle['metrics']['format_retries'],1)
+        calls=observer._observe_once.call_args_list
+        self.assertTrue(calls[1].kwargs['concise'])
+        self.assertEqual(calls[0].args[2],calls[1].args[2])
 
     @unittest.skipUnless(os.environ.get("FORTE_PEER_SNAPSHOT"),"Set B/C snapshot")
     def test_actual_c_and_b_accept_producer_receipt_with_synthetic_registry(self):
@@ -104,7 +123,7 @@ class DepartureTests(unittest.TestCase):
         observer=Mock();observer._observe_once.side_effect=[parsed,features()]
         with patch("app.inference.assessments.probe_video",return_value=VideoInfo(3,0,64,64,0)), \
              patch("app.inference.assessments.sample_frames",return_value={i:SampledFrame(i,None) for i in range(3)}):
-            bundle=extract_assessments(observer,"synthetic.mov",original)
+            bundle=extract_assessments(observer,"synthetic.mov",original, refine_candidates=False)
         result=detection.finalize_bundle(original,bundle,supported_rule_ids=["cashier_leaves_service"],registry=registry)
         self.assertEqual(result["verdict"],"no_violation")
         self.assertTrue(all(v is None for v in bundle["assessments"][0]["facts"].values()))

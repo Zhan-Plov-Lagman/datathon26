@@ -1,7 +1,7 @@
 """Conservative draft.v2 visual candidate extraction; never a public verdict.
 
-The geometry/continuity verifier is not implemented. Model claims are retained
-as local diagnostics, never promoted to established departure/service facts.
+Visual features can support draft predicates with explicitly scoped local
+context. Sparse sampling and model quality remain unvalidated; no public verdict.
 """
 from __future__ import annotations
 
@@ -11,6 +11,8 @@ import math
 import time
 
 from app.inference.schema import ModelOutputError, parse_observations
+from app.inference.departure import (VERSION, PROMPT as FEATURE_PROMPT, parse_features,
+                                    validate_context, ground_facts)
 from app.video.sampling import check_deadline, probe_video, sample_frames
 
 FACTS = ("bank_cash_acceptance", "actor_is_cashier", "cashier_left_workplace",
@@ -140,7 +142,7 @@ def validate_report(report):
         raise ValueError("Invalid observations report for assessment") from None
 
 
-def build_bundle(report, results):
+def build_bundle(report, results, *, local_context=None, executed=None):
     output = copy.deepcopy(report)
     packets, diagnostics = [], []
     # Existing observation IDs remain valid; append fresh visual observations.
@@ -153,49 +155,81 @@ def build_bundle(report, results):
                  ("window_start_sec", "window_end_sec", "frame_timestamps")}
         fresh.update({"window_id": wid, **{k: result[k] for k in
                      ("operation_context", "visibility_limits", "observations")}})
+        fresh["observations"] = copy.deepcopy(fresh["observations"])
+        feature_refs = []
+        features = result.get("features")
+        if features is not None:
+            for key, value in features.items():
+                if value is None:
+                    continue
+                feature_refs.append({"window_id": wid, "observation_index": len(fresh["observations"])})
+                fresh["observations"].append({
+                    "start_frame": 0, "end_frame": len(fresh["frame_timestamps"])-1,
+                    "start_sec": fresh["frame_timestamps"][0], "end_sec": fresh["frame_timestamps"][-1],
+                    "description": f"Local visual feature {key}: {json.dumps(value)}; unvalidated model observation.",
+                    "feature_key": key})
         output["windows"].append(fresh)
         for episode in result["episodes"]:
-            proposed.append((wid, episode))
-    for index, (wid, episode) in enumerate(proposed):
+            proposed.append((wid, episode, fresh, features, feature_refs))
+    for index, (wid, episode, window, features, feature_refs) in enumerate(proposed):
         # Overlap is NOT proof of identity. Withhold ambiguous proposals instead
         # of inventing a tracker or counting overlapping windows as two events.
         ambiguous = any(index != j and max(episode["inside_sec"], other["inside_sec"])
                         <= min(episode["last_sec"], other["last_sec"])
-                        for j, (_, other) in enumerate(proposed))
-        refs = [{"window_id": wid, "observation_index": i} for i in episode["observation_indices"]]
+                        for j, (_, other, _, _, _) in enumerate(proposed))
+        refs = [{"window_id": wid, "observation_index": i} for i in episode["observation_indices"]] + feature_refs
         conflict = (episode["claims"]["service_in_progress"] is True
                     and episode["claims"]["service_completed"] is True)
         identifier = f"{report.get('job_id', 'local')}:proposal:{wid}"
+        facts = dict.fromkeys(FACTS)
+        fact_sources = {key: {"origin": "unknown", "observation_refs": [],
+                             "reason": "feature_stage_not_executed"} for key in FACTS}
+        if features is not None:
+            facts, fact_sources = ground_facts(features, episode, window, local_context, refs)
+        if ambiguous or conflict:
+            facts = dict.fromkeys(FACTS)
+            fact_sources = {key: {"origin": "unknown", "observation_refs": [],
+                                 "reason": "ambiguous_episode_or_conflict"} for key in FACTS}
         diagnostics.append({"proposal_id": identifier, "event_id": identifier,
                             "rule_id": "cashier_leaves_service", "operation_id": None,
                             "actor_id": None, **episode, "observation_refs": refs,
                             "identity_resolved": False, "overlap_ambiguous": ambiguous,
                             "service_conflict": conflict, "right_boundary_is_actual_end": False,
                             "conflicts": ["service_progress_and_completion"] if conflict else [],
-                            "origin": "visual_model_proposal", "local_context_used": False,
-                            "unknown_reasons": {
-                                "bank_cash_acceptance": "cash_context_not_confirmed",
-                                "actor_is_cashier": "functional_role_not_confirmed",
-                                "cashier_left_workplace": "zone_and_crossing_not_verified",
-                                "service_in_progress": "handover_continuity_at_departure_not_verified",
-                                "service_completed": "completion_criterion_unapproved_and_continuity_unverified"}})
+                            "origin": "visual_model_proposal", "local_context_used": local_context is not None,
+                            "visual_features": features, "fact_sources": fact_sources,
+                            "unknown_reasons": {key: fact_sources[key]["reason"] for key in FACTS if facts[key] is None}})
         if ambiguous:
             continue
         packets.append({"rule_id": "cashier_leaves_service", "event_id": identifier,
                         "anchor_sec": episode["anchor_sec"], "observation_refs": refs,
-                        # No geometric/role/continuity confirmation available.
-                        # Preserve unverified model claims separately, not as facts.
-                        "facts": dict.fromkeys(FACTS), "refinement_complete": False,
+                        # Draft predicates do not imply completed refinement.
+                        "facts": facts, "refinement_complete": False,
                         "full_sequence_visible": False})
-    limitations = ["model_claims_unvalidated", "local_context_not_supported",
-                            "geometry_and_continuity_not_verified", "refinement_not_implemented",
+    limitations = ["model_quality_unvalidated", "sampled_visibility_only", "refinement_not_implemented",
                             "cross_window_identity_unresolved", "search_coverage_unvalidated"]
-    for episode in diagnostics:
-        episode["fact_sources"] = {key: {"origin": "unknown", "observation_refs": [],
-                                        "reason": episode["unknown_reasons"][key]} for key in FACTS}
+    if local_context is None:
+        limitations.append("local_context_missing")
+    runs = []
+    trace = []
+    if executed is not None:
+        expected = [w["window_id"] for w in report["windows"]]
+        if executed != expected or any("features" not in result for result in results):
+            raise ValueError("Incomplete detector execution trace")
+        offset = max(expected)+1
+        for i, original_id in enumerate(executed):
+            trace.append({"source_window_id": original_id, "output_window_id": offset+i,
+                          "completed_stages": ["visual_candidate", "visual_features", "predicate_evaluation"],
+                          "same_source_pts": True})
+        runs = [{"rule_id": "cashier_leaves_service", "detector_version": VERSION,
+                 "status": "complete", "processed_window_ids":
+                 [item for record in trace for item in (record["source_window_id"], record["output_window_id"])],
+                 "refinement_status": "not_needed"}]
     return {"schema_version": "assessment_bundle.v1", "complete": True,
             "report": output, "assessments": packets,
             "diagnostics": {"episodes": diagnostics, "search": {
+                "schema_version": "detector_execution.v1", "job_id": report.get("job_id"),
+                "detector_runs": runs, "execution_trace": trace,
                 "assessed_rule_ids": ["cashier_leaves_service"],
                 "unresolved_episode_ids": [e["event_id"] for e in diagnostics],
                 "limitations": limitations}}, "limitations": limitations,
@@ -204,9 +238,8 @@ def build_bundle(report, results):
 
 def extract_assessments(observer, video_path, report, timeout_sec=120, *, deadline=None,
                         local_context=None):
-    if local_context is not None:
-        raise ValueError("Local context verification is not implemented; pass None")
     validate_report(report)
+    local_context = validate_context(local_context, report)
     if not math.isfinite(timeout_sec) or timeout_sec <= 0:
         raise ValueError("Timeout must be finite and positive")
     check_deadline(deadline)
@@ -221,6 +254,7 @@ def extract_assessments(observer, video_path, report, timeout_sec=120, *, deadli
     if any(selected[t].timestamp_sec != t for t in targets):
         raise ValueError("Observation timestamps do not match source PTS")
     results = []
+    executed = []
     format_retries = 0
     for window in report["windows"]:
         frames = [selected[t] for t in window["frame_timestamps"]]
@@ -230,14 +264,27 @@ def extract_assessments(observer, video_path, report, timeout_sec=120, *, deadli
                 result = observer._observe_once(frames, "", deadline, concise=bool(attempt),
                                                 system_prompt=PROMPT, parser=parse_candidates)
                 check_deadline(deadline)
-                results.append(result)
                 break
             except ModelOutputError as exc:
                 if attempt or exc.reason != "invalid_json":
                     raise
                 format_retries += 1
+        for attempt in range(2):
+            check_deadline(deadline)
+            try:
+                features = observer._observe_once(frames, "", deadline, concise=bool(attempt),
+                                                  system_prompt=FEATURE_PROMPT, parser=parse_features)
+                check_deadline(deadline)
+                result["features"] = features
+                break
+            except ModelOutputError as exc:
+                if attempt or exc.reason != "invalid_json":
+                    raise
+                format_retries += 1
+        results.append(result)
+        executed.append(window["window_id"])
         check_deadline(deadline)
-    bundle = build_bundle(report, results)
+    bundle = build_bundle(report, results, local_context=local_context, executed=executed)
     bundle["metrics"] = {"total_sec": round(time.monotonic() - started, 3),
                          "windows": len(results), "proposals": len(bundle["diagnostics"]["episodes"]),
                          "format_retries": format_retries}

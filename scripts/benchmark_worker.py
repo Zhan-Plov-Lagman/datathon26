@@ -65,10 +65,11 @@ def main() -> None:
     parser.add_argument("--model-dir", default="models/Qwen3-VL-2B-Instruct-shards")
     parser.add_argument("--timeout", type=float, default=240)
     parser.add_argument("--refine", action="store_true", help="Also test a middle interval, not a labeled event")
+    parser.add_argument("--assess", action="store_true", help="Run visual predicates and execution receipt after analyze")
     parser.add_argument("--stability", action="store_true", help="Six sequential cases on one explicit development video")
     args = parser.parse_args()
-    if args.stability and (not args.video or args.refine):
-        parser.error("--stability requires --video and cannot be combined with --refine")
+    if args.stability and (not args.video or args.refine or args.assess):
+        parser.error("--stability requires --video and cannot be combined with --refine/--assess")
     output = Path(args.output_dir)
     output.mkdir(parents=True, exist_ok=False)
     # Select by duration only, without reading labels or inferring from filenames.
@@ -96,6 +97,12 @@ def main() -> None:
         try:
             deadline = started + args.timeout
             report = worker.analyze(path, f"benchmark-{index}", timeout_sec=args.timeout, deadline=deadline)
+            if args.assess:
+                bundle = worker.assess(path, report, timeout_sec=args.timeout, deadline=deadline)
+                (output / f"assessments-{index}.json").write_text(json.dumps(bundle), encoding="utf-8")
+                row["assessment_metrics"] = bundle["metrics"]
+                row["assessment_packets"] = len(bundle["assessments"])
+                row["detector_runs"] = len(bundle["diagnostics"]["search"]["detector_runs"])
             if args.refine:
                 middle = info.duration_sec / 2
                 refinement = worker.refine(path, f"benchmark-{index}", [{
